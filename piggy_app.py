@@ -1,7 +1,7 @@
 import streamlit as st # type: ignore
 import pandas as pd # type: ignore
 
-st.sidebar.title("🐷 Piggy Navigation")
+st.sidebar.title("Piggy Navigation")
 page = st.sidebar.radio("Go to:", ["Login", "Dashboard", "Transactions", "Goals", "Reports"])
 
 user = {"name": "Niya", "email": "niya@piggy.com"}
@@ -11,7 +11,7 @@ transactions = [
     {"date": "2025-10-05", "desc": "Paycheck", "amount": 800.00, "category": "Income"},
 ]
 
-st.title("🐷 Piggy: A Smart Finance Assistant for Gen Z")
+st.title("Piggy: A Smart Finance Assistant for Gen Z")
 
 if page == "Dashboard":
     st.subheader("User Info")
