@@ -246,20 +246,66 @@ class PDFStatementParser:
 
     @staticmethod
     def parse_transactions(text: str) -> List[Transaction]:
+        """
+        Try to parse transactions from PDF text.
+
+        1) First try 3-line blocks:
+           Date
+           Description
+           Amount
+
+        2) If that fails, fall back to old single-line format:
+           YYYY-MM-DD SOME DESCRIPTION -123.45
+        """
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         transactions: List[Transaction] = []
         counter = 1
 
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
+        # ---------- PASS 1: 3-line blocks (Date, Description, Amount) ----------
+        i = 0
+        while i + 2 < len(lines):
+            date_candidate = lines[i]
 
+            if re.match(r"\d{4}-\d{2}-\d{2}", date_candidate):
+                desc = lines[i + 1]
+                amount_line = lines[i + 2]
+                amt_match = re.search(r"(-?\d[\d,]*\.\d{2})", amount_line)
+                if amt_match:
+                    amount_str = amt_match.group(1).replace(",", "")
+                    try:
+                        amount = float(amount_str)
+                    except ValueError:
+                        amount = None
+
+                    if amount is not None:
+                        category = PDFStatementParser.auto_categorize(desc)
+                        transactions.append(
+                            Transaction(
+                                transaction_id=f"tx{counter}",
+                                date=date_candidate,
+                                description=desc,
+                                amount=amount,
+                                category=category,
+                            )
+                        )
+                        counter += 1
+                        i += 3
+                        continue  # go to next block
+
+            i += 1
+
+        # If we found any in block mode, return them
+        if transactions:
+            return transactions
+
+        # ---------- PASS 2: single-line fallback ----------
+        for line in lines:
             # find amount
-            match = re.search(r"(-?\d+\.\d{2})", line)
+            match = re.search(r"(-?\d[\d,]*\.\d{2})", line)
             if not match:
                 continue
 
-            amount_str = match.group(1)
+            amount_str = match.group(1).replace(",", "")
             try:
                 amount = float(amount_str)
             except ValueError:
@@ -278,14 +324,15 @@ class PDFStatementParser:
                 desc = "(no description)"
 
             category = PDFStatementParser.auto_categorize(desc)
-            tx = Transaction(
-                transaction_id=f"tx{counter}",
-                date=tx_date,
-                description=desc,
-                amount=amount,
-                category=category,
+            transactions.append(
+                Transaction(
+                    transaction_id=f"tx{counter}",
+                    date=tx_date,
+                    description=desc,
+                    amount=amount,
+                    category=category,
+                )
             )
-            transactions.append(tx)
             counter += 1
 
         return transactions
@@ -295,19 +342,82 @@ class PDFStatementParser:
         d = desc.upper()
         if any(word in d for word in ["UBER EATS", "EATS", "DOORDASH", "RESTAURANT", "CAFE", "STARBUCKS"]):
             return "Food"
-        if any(word in d for word in ["WALMART", "COSTCO", "GROCERY", "SUPERMARKET"]):
+        if any(word in d for word in ["WALMART", "COSTCO", "GROCERY", "SUPERMARKET", "NO FRILLS", "FRESHCO"]):
             return "Groceries"
         if any(word in d for word in ["NETFLIX", "SPOTIFY", "DISNEY", "SUBSCRIPTION"]):
             return "Entertainment"
-        if any(word in d for word in ["UBER", "LYFT", "GAS", "SHELL", "PETRO", "TRANSIT"]):
+        if any(word in d for word in ["UBER", "LYFT", "GAS", "SHELL", "PETRO", "TRANSIT", "TAXI"]):
             return "Transport"
-        if any(word in d for word in ["PAYROLL", "SALARY", "PAYCHEQUE", "PAYCHECK"]):
+        if any(word in d for word in ["PAYROLL", "SALARY", "PAYCHEQUE", "PAYCHECK", "DEPOSIT"]):
             return "Income"
         if any(word in d for word in ["RENT", "MORTGAGE"]):
             return "Housing"
-        if any(word in d for word in ["PAYMENT", "REFUND", "CREDIT"]):
+        if any(word in d for word in ["PAYMENT", "REFUND", "CREDIT", "RETURN"]):
             return "Payment or credit"
         return "Other"
+
+
+class CSVStatementParser:
+    @staticmethod
+    def parse_transactions(uploaded_file) -> List[Transaction]:
+        """
+        Parse CSV with columns like:
+        - Date / Transaction Date / Posting Date
+        - Description / Details / Memo
+        - Amount / Amt / Value
+        """
+        df = pd.read_csv(uploaded_file)
+
+        # Normalize column names
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        def find_col(possible_names):
+            for name in possible_names:
+                if name in df.columns:
+                    return name
+            return None
+
+        date_col = find_col(["date", "transaction date", "posting date", "posted date"])
+        desc_col = find_col(["description", "details", "memo", "narrative"])
+        amt_col = find_col(["amount", "amt", "value", "transaction amount"])
+
+        if not all([date_col, desc_col, amt_col]):
+            raise ValueError(
+                "CSV must contain date, description, and amount columns (detected columns: "
+                + ", ".join(df.columns)
+                + ")"
+            )
+
+        transactions: List[Transaction] = []
+        counter = 1
+
+        for _, row in df.iterrows():
+            date_str = str(row.get(date_col, "")).strip()
+            desc = str(row.get(desc_col, "")).strip()
+            amt_raw = row.get(amt_col, 0)
+
+            try:
+                amount = float(str(amt_raw).replace(",", ""))
+            except ValueError:
+                continue
+
+            if not desc:
+                desc = "(no description)"
+
+            category = PDFStatementParser.auto_categorize(desc)
+
+            transactions.append(
+                Transaction(
+                    transaction_id=f"csv{counter}",
+                    date=date_str if date_str else None,
+                    description=desc,
+                    amount=amount,
+                    category=category,
+                )
+            )
+            counter += 1
+
+        return transactions
 
 
 class SpendingAnalyzer:
@@ -665,14 +775,21 @@ def render_reports_page():
     require_auth()
     st.title("Spending report and Piggy AI")
 
-    st.write("Upload a credit card statement in PDF form.")
+    st.write("Upload a credit card or bank statement in **PDF or CSV** format.")
 
-    uploaded_file = st.file_uploader("Upload credit card statement (PDF)", type=["pdf"])
+    uploaded_file = st.file_uploader("Upload statement (PDF or CSV)", type=["pdf", "csv"])
 
     if uploaded_file is not None:
         with st.spinner("Reading and analyzing your statement..."):
-            text = PDFStatementParser.extract_text(uploaded_file)
-            transactions = PDFStatementParser.parse_transactions(text)
+            try:
+                if uploaded_file.name.lower().endswith(".pdf"):
+                    text = PDFStatementParser.extract_text(uploaded_file)
+                    transactions = PDFStatementParser.parse_transactions(text)
+                else:
+                    transactions = CSVStatementParser.parse_transactions(uploaded_file)
+            except Exception as e:
+                st.error(f"Could not read this file: {e}")
+                return
 
             if not transactions:
                 st.error("No transactions detected.")
