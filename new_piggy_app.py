@@ -263,12 +263,12 @@ class PDFStatementParser:
         """
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-        # First attempt: real line by line transactions
+        # First attempt, real line by line transactions
         transactions = PDFStatementParser._parse_line_transactions(lines)
         if transactions:
             return transactions
 
-        # Fallback: use the Purchases total from the summary, if available
+        # Fallback, use Purchases total from the summary if available
         purchases_total = PDFStatementParser._extract_purchases_total(lines)
         if purchases_total is not None:
             return [
@@ -290,19 +290,19 @@ class PDFStatementParser:
         Parse individual rows that look like:
 
             Oct 07 SOME MERCHANT NAME  70.15
-            2024-10-03 AMAZON  45.99
+            2024 10 03 AMAZON  45.99
             10/03/2024 GROCERY STORE  123.45
 
         Rules:
         - Line must start with a date.
-        - We take the LAST numeric token as the amount.
-        - If we get fewer than 2 rows, we treat this as a failure and let
+        - We take the last numeric token as the amount.
+        - If we get fewer than two rows we treat this as failure and let
           the caller fall back to the summary mode.
         """
         transactions: List[Transaction] = []
         counter = 1
 
-        # Accept several common date formats
+        # Accept several common date formats at beginning of line
         date_regex = re.compile(
             r"^("
             r"\d{4}-\d{2}-\d{2}"                      # 2024-10-03
@@ -320,7 +320,7 @@ class PDFStatementParser:
                 continue
 
             upper = line.upper()
-            # Skip obvious non transaction date lines such as "Please pay this amount by Nov 17, 2025"
+            # Skip due date style lines
             if "PAY THIS AMOUNT" in upper or "PAYMENT DUE" in upper or "AMOUNT DUE" in upper:
                 continue
 
@@ -344,7 +344,6 @@ class PDFStatementParser:
 
             date_part = m.group(0)
 
-            # Description is what is left between date and amount
             desc_part = line[len(date_part):]
             desc_part = desc_part.replace(amount_str, "")
             desc_part = desc_part.replace("$", "").strip()
@@ -369,7 +368,25 @@ class PDFStatementParser:
             return []
 
         return transactions
-        
+
+    @staticmethod
+    def _extract_purchases_total(lines: List[str]) -> Optional[float]:
+        """
+        Look for a summary line like:
+
+            Purchases 310.15
+            Purchases       $310.15
+        """
+        for line in lines:
+            if "Purchases" in line:
+                m = re.search(r"(-?\d[\d,]*\.\d{2})", line)
+                if m:
+                    try:
+                        return float(m.group(1).replace(",", ""))
+                    except ValueError:
+                        pass
+        return None
+
     @staticmethod
     def auto_categorize(desc: str) -> str:
         d = desc.upper()
