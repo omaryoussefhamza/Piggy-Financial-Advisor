@@ -254,96 +254,122 @@ class PDFStatementParser:
     @staticmethod
     def parse_transactions(text: str) -> List[Transaction]:
         """
-        Try to parse transactions from PDF text.
+        Universal transaction parser with a safe fallback.
 
-        1) First try 3-line blocks:
-           Date
-           Description
-           Amount
-
-        2) If that fails, fall back to old single-line format:
-           YYYY-MM-DD SOME DESCRIPTION -123.45
+        Step 1: try to parse individual transaction lines that start with a date.
+        Step 2: if we cannot find at least two such lines, fall back to using
+        the 'Purchases' total from the summary page and create a single
+        aggregate transaction.
         """
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        transactions: List[Transaction] = []
-        counter = 1
 
-        # ---------- PASS 1: 3-line blocks (Date, Description, Amount) ----------
-        i = 0
-        while i + 2 < len(lines):
-            date_candidate = lines[i]
-
-            if re.match(r"\d{4}-\d{2}-\d{2}", date_candidate):
-                desc = lines[i + 1]
-                amount_line = lines[i + 2]
-                amt_match = re.search(r"(-?\d[\d,]*\.\d{2})", amount_line)
-                if amt_match:
-                    amount_str = amt_match.group(1).replace(",", "")
-                    try:
-                        amount = float(amount_str)
-                    except ValueError:
-                        amount = None
-
-                    if amount is not None:
-                        category = PDFStatementParser.auto_categorize(desc)
-                        transactions.append(
-                            Transaction(
-                                transaction_id=f"tx{counter}",
-                                date=date_candidate,
-                                description=desc,
-                                amount=amount,
-                                category=category,
-                            )
-                        )
-                        counter += 1
-                        i += 3
-                        continue  # go to next block
-
-            i += 1
-
-        # If we found any in block mode, return them
+        # First attempt: real line by line transactions
+        transactions = PDFStatementParser._parse_line_transactions(lines)
         if transactions:
             return transactions
 
-        # ---------- PASS 2: single-line fallback ----------
+        # Fallback: use the Purchases total from the summary, if available
+        purchases_total = PDFStatementParser._extract_purchases_total(lines)
+        if purchases_total is not None:
+            return [
+                Transaction(
+                    transaction_id="summary1",
+                    date=None,
+                    description="Statement purchases total",
+                    amount=purchases_total,
+                    category="Other",
+                )
+            ]
+
+        # Nothing usable detected
+        return []
+
+    @staticmethod
+    def _parse_line_transactions(lines: List[str]) -> List[Transaction]:
+        """
+        Parse individual rows that look like:
+
+            Oct 07 SOME MERCHANT NAME  70.15
+            2024-10-03 AMAZON  45.99
+            10/03/2024 GROCERY STORE  123.45
+
+        Rules:
+        - Line must start with a date.
+        - We take the LAST numeric token as the amount.
+        - If we get fewer than 2 rows, we treat this as a failure and let
+          the caller fall back to the summary mode.
+        """
+        transactions: List[Transaction] = []
+        counter = 1
+
+        # Accept several common date formats
+        date_regex = re.compile(
+            r"^("
+            r"\d{4}-\d{2}-\d{2}"                      # 2024-10-03
+            r"|\d{2}/\d{2}/\d{4}"                     # 10/03/2024
+            r"|\d{2}-\d{2}-\d{4}"                     # 10-03-2024
+            r"|\d{2}\.\d{2}\.\d{4}"                   # 10.03.2024
+            r"|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}"  # Oct 03
+            r")",
+            re.IGNORECASE,
+        )
+
         for line in lines:
-            # find amount
-            match = re.search(r"(-?\d[\d,]*\.\d{2})", line)
-            if not match:
+            m = date_regex.match(line)
+            if not m:
                 continue
 
-            amount_str = match.group(1).replace(",", "")
+            upper = line.upper()
+            # Skip obvious non transaction date lines such as "Please pay this amount by Nov 17, 2025"
+            if "PAY THIS AMOUNT" in upper or "PAYMENT DUE" in upper or "AMOUNT DUE" in upper:
+                continue
+
+            # Prefer decimal amounts, fallback to plain integers
+            decimal_matches = re.findall(r"-?\d[\d,]*\.\d{2}", line)
+            integer_matches = re.findall(r"-?\d[\d,]*\b", line)
+
+            amount_str = None
+            if decimal_matches:
+                amount_str = decimal_matches[-1]
+            elif integer_matches:
+                amount_str = integer_matches[-1]
+
+            if not amount_str:
+                continue
+
             try:
-                amount = float(amount_str)
+                amount = float(amount_str.replace(",", ""))
             except ValueError:
                 continue
 
-            before = line[: match.start()].strip()
-            parts = before.split()
-            tx_date = None
-            desc = before
+            date_part = m.group(0)
 
-            if parts and re.match(r"\d{4}-\d{2}-\d{2}", parts[0]):
-                tx_date = parts[0]
-                desc = " ".join(parts[1:]).strip()
+            # Description is what is left between date and amount
+            desc_part = line[len(date_part):]
+            desc_part = desc_part.replace(amount_str, "")
+            desc_part = desc_part.replace("$", "").strip()
+            if not desc_part:
+                desc_part = "(no description)"
 
-            if not desc:
-                desc = "(no description)"
+            category = PDFStatementParser.auto_categorize(desc_part)
 
-            category = PDFStatementParser.auto_categorize(desc)
             transactions.append(
                 Transaction(
                     transaction_id=f"tx{counter}",
-                    date=tx_date,
-                    description=desc,
+                    date=date_part,
+                    description=desc_part,
                     amount=amount,
                     category=category,
                 )
             )
             counter += 1
 
-        return transactions
+        # If we did not get at least two transaction rows, treat this as failure
+        if len(transactions) < 2:
+            return []
 
+        return transactions
+        
     @staticmethod
     def auto_categorize(desc: str) -> str:
         d = desc.upper()
