@@ -254,21 +254,42 @@ class PDFStatementParser:
     @staticmethod
     def parse_transactions(text: str) -> List[Transaction]:
         """
-        Universal transaction parser with a safe fallback.
+        Parse credit card statements in a bank agnostic way.
 
-        Step 1: try to parse individual transaction lines that start with a date.
-        Step 2: if we cannot find at least two such lines, fall back to using
-        the 'Purchases' total from the summary page and create a single
-        aggregate transaction.
+        1) First, try to read the structured payment section and the
+           "new charges and credits" section. This is the layout your
+           CIBC style PDF uses (date date merchant, then category line
+           with amount).
+        2) If that fails, fall back to using the Purchases total from
+           the summary page so we at least get the right spend for the
+           period.
         """
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 
-        # First attempt, real line by line transactions
-        transactions = PDFStatementParser._parse_line_transactions(lines)
-        if transactions:
-            return transactions
+        charges = PDFStatementParser._parse_new_charges(lines)
+        payments = PDFStatementParser._parse_payments(lines)
 
-        # Fallback, use Purchases total from the summary if available
+        txs: List[Transaction] = []
+        counter = 1
+
+        # First add payments (stored as negative amounts so they reduce balance)
+        for date_str, desc, amount in payments + charges:
+            category = PDFStatementParser.auto_categorize(desc)
+            txs.append(
+                Transaction(
+                    transaction_id=f"tx{counter}",
+                    date=date_str,
+                    description=desc,
+                    amount=amount,
+                    category=category,
+                )
+            )
+            counter += 1
+
+        if txs:
+            return txs
+
+        # Fallback: just use Purchases total from the summary page
         purchases_total = PDFStatementParser._extract_purchases_total(lines)
         if purchases_total is not None:
             return [
@@ -281,102 +302,115 @@ class PDFStatementParser:
                 )
             ]
 
-        # Nothing usable detected
+        # Nothing usable
         return []
 
+    # --------- helpers for structured blocks ---------
+
     @staticmethod
-    def _parse_line_transactions(lines: List[str]) -> List[Transaction]:
-        """
-        Parse individual rows that look like:
+    def _parse_payments(lines: List[str]):
+        """Parse the 'Your payments' block (treat as negative amounts)."""
+        in_block = False
+        results = []
 
-            Oct 07 SOME MERCHANT NAME  70.15
-            2024 10 03 AMAZON  45.99
-            10/03/2024 GROCERY STORE  123.45
-
-        Rules:
-        - Line must start with a date.
-        - We take the last numeric token as the amount.
-        - If we get fewer than two rows we treat this as failure and let
-          the caller fall back to the summary mode.
-        """
-        transactions: List[Transaction] = []
-        counter = 1
-
-        # Accept several common date formats at beginning of line
-        date_regex = re.compile(
-            r"^("
-            r"\d{4}-\d{2}-\d{2}"                      # 2024-10-03
-            r"|\d{2}/\d{2}/\d{4}"                     # 10/03/2024
-            r"|\d{2}-\d{2}-\d{4}"                     # 10-03-2024
-            r"|\d{2}\.\d{2}\.\d{4}"                   # 10.03.2024
-            r"|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}"  # Oct 03
-            r")",
+        datepair_re = re.compile(
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+"
+            r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}",
             re.IGNORECASE,
         )
+        amount_re = re.compile(r"(-?\d[\d,]*\.\d{2})")
 
         for line in lines:
-            m = date_regex.match(line)
+            if "Your payments" in line:
+                in_block = True
+                continue
+            if in_block and line.startswith("Total payments"):
+                break
+            if not in_block:
+                continue
+
+            m = datepair_re.match(line)
             if not m:
                 continue
 
-            upper = line.upper()
-            # Skip due date style lines
-            if "PAY THIS AMOUNT" in upper or "PAYMENT DUE" in upper or "AMOUNT DUE" in upper:
+            am_m = amount_re.search(line)
+            if not am_m:
                 continue
 
-            # Prefer decimal amounts, fallback to plain integers
-            decimal_matches = re.findall(r"-?\d[\d,]*\.\d{2}", line)
-            integer_matches = re.findall(r"-?\d[\d,]*\b", line)
-
-            amount_str = None
-            if decimal_matches:
-                amount_str = decimal_matches[-1]
-            elif integer_matches:
-                amount_str = integer_matches[-1]
-
-            if not amount_str:
-                continue
-
-            try:
-                amount = float(amount_str.replace(",", ""))
-            except ValueError:
-                continue
+            amount_str = am_m.group(1).replace(",", "")
+            amount = float(amount_str)
 
             date_part = m.group(0)
+            desc = line[m.end():].replace(amount_str, "").strip()
 
-            desc_part = line[len(date_part):]
-            desc_part = desc_part.replace(amount_str, "")
-            desc_part = desc_part.replace("$", "").strip()
-            if not desc_part:
-                desc_part = "(no description)"
+            # store payments as negative spend
+            results.append((date_part, desc, -amount))
 
-            category = PDFStatementParser.auto_categorize(desc_part)
+        return results
 
-            transactions.append(
-                Transaction(
-                    transaction_id=f"tx{counter}",
-                    date=date_part,
-                    description=desc_part,
-                    amount=amount,
-                    category=category,
-                )
-            )
-            counter += 1
+    @staticmethod
+    def _parse_new_charges(lines: List[str]):
+        """
+        Parse the 'Your new charges and credits' block.
 
-        # If we did not get at least two transaction rows, treat this as failure
-        if len(transactions) < 2:
-            return []
+        Pattern:
 
-        return transactions
+            Oct 03 Oct 06 MERCHANT NAME ...
+             Category 13.77
+        """
+        in_block = False
+        results = []
+
+        datepair_re = re.compile(
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+"
+            r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}",
+            re.IGNORECASE,
+        )
+        amount_re = re.compile(r"(-?\d[\d,]*\.\d{2})")
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            if "Your new charges and credits" in line:
+                in_block = True
+                i += 1
+                continue
+
+            if in_block and line.startswith("Total for "):
+                break
+
+            if not in_block:
+                i += 1
+                continue
+
+            m = datepair_re.match(line)
+            if m:
+                date_part = m.group(0)
+                desc = line[m.end():].strip()
+
+                # find the next line that has an amount on it
+                j = i + 1
+                while j < len(lines) and not amount_re.search(lines[j]):
+                    j += 1
+                if j >= len(lines):
+                    break
+
+                amount_line = lines[j]
+                am_m = amount_re.search(amount_line)
+                amount_str = am_m.group(1).replace(",", "")
+                amount = float(amount_str)
+
+                results.append((date_part, desc, amount))
+                i = j + 1
+            else:
+                i += 1
+
+        return results
 
     @staticmethod
     def _extract_purchases_total(lines: List[str]) -> Optional[float]:
-        """
-        Look for a summary line like:
-
-            Purchases 310.15
-            Purchases       $310.15
-        """
+        """Grab 'Purchases 310.15' from the summary if it exists."""
         for line in lines:
             if "Purchases" in line:
                 m = re.search(r"(-?\d[\d,]*\.\d{2})", line)
