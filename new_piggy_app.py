@@ -156,6 +156,13 @@ class StatementHistoryItem:
     total_income: float
     total_spent: float
 
+@dataclass
+class Goal:
+    goal_id: str
+    name: str
+    target_amount: float
+    current_amount: float = 0.0
+    target_date: Optional[str] = None
 
 @dataclass
 class FinancialAccount:
@@ -168,7 +175,6 @@ class FinancialAccount:
     def add_transaction(self, tx: Transaction) -> None:
         self.transactions.append(tx)
 
-
 @dataclass
 class User:
     user_id: str
@@ -177,6 +183,7 @@ class User:
     password: str  # plain for demo only
     accounts: List[FinancialAccount] = field(default_factory=list)
     history: List[StatementHistoryItem] = field(default_factory=list)
+    goals: List[Goal] = field(default_factory=list)
 
     def check_password(self, pwd: str) -> bool:
         return self.password == pwd
@@ -609,7 +616,18 @@ def require_auth():
         st.warning("Please log in first on the Login page.")
         st.stop()
 
-
+def compute_total_savings_from_history(user: User) -> float:
+    """
+    Very simple rule: for each statement snapshot, take max(income - spending, 0)
+    and sum across history. This is used to fill the piggy bank.
+    """
+    total = 0.0
+    for item in user.history:
+        net = item.total_income - item.total_spent
+        if net > 0:
+            total += net
+    return total
+    
 # ===================== UI PAGES =====================
 
 def render_login_page():
@@ -842,7 +860,7 @@ def render_reports_page():
     rec = st.session_state.recommendation
     if rec:
         st.subheader(rec.title)
-        st.write(rec.description)
+        st.text(rec.description)
         st.caption(f"Generated at {rec.generation_date.strftime('%Y-%m-%d %H:%M:%S')}")
 
 
@@ -865,12 +883,159 @@ def render_history_page():
     df = pd.DataFrame(data).sort_values("Uploaded at", ascending=False)
     st.dataframe(df)
 
+def render_goals_page():
+    require_auth()
+    user = get_current_user()
+    st.title("Savings goals")
+
+    if not user:
+        st.info("No user loaded.")
+        return
+
+    # If user has uploaded no statements, there is nothing to base progress on
+    if not user.history:
+        st.info("Upload at least one statement in the Reports tab so I can estimate your savings and track a goal.")
+        return
+
+    total_savings = compute_total_savings_from_history(user)
+
+    st.write(
+        f"Based on the statements you have uploaded so far, "
+        f"I estimate your total savings at about **${total_savings:,.2f}**."
+    )
+
+    # If no goal exists yet, let the user create one
+    if not user.goals:
+        st.subheader("Create your first goal")
+        with st.form("create_goal_form"):
+            goal_name = st.text_input("Goal name", placeholder="Trip, emergency fund, new laptop")
+            target_amount_str = st.text_input("Target amount", placeholder="e.g. 2000")
+            target_date = st.text_input("Target date (optional)", placeholder="e.g. 2026-12-31")
+            create_submitted = st.form_submit_button("Create goal")
+
+        if create_submitted:
+            try:
+                target_amount = float(target_amount_str)
+                if target_amount <= 0:
+                    st.error("Target amount must be positive.")
+                else:
+                    new_goal = Goal(
+                        goal_id=f"g{len(user.goals) + 1}",
+                        name=goal_name or "My goal",
+                        target_amount=target_amount,
+                        current_amount=total_savings,
+                        target_date=target_date or None,
+                    )
+                    user.goals.append(new_goal)
+                    st.success("Goal created.")
+                    st.rerun()
+            except ValueError:
+                st.error("Please enter a numeric target amount.")
+        return  # do not draw the rest until goal exists
+
+    # For now we work with the first goal only
+    goal = user.goals[0]
+    # Update current amount from latest savings estimate
+    goal.current_amount = total_savings
+    progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
+
+    st.subheader("Current goal")
+    cols = st.columns(2)
+
+    with cols[0]:
+        st.write(f"**Goal:** {goal.name}")
+        st.write(f"**Target:** ${goal.target_amount:,.2f}")
+        st.write(f"**Saved so far:** ${goal.current_amount:,.2f}")
+        if goal.target_date:
+            st.write(f"**Target date:** {goal.target_date}")
+
+        st.progress(progress)
+
+        if progress < 1.0:
+            st.info(f"Your piggy bank is about {progress * 100:.1f} percent full.")
+        else:
+            st.success("Your piggy bank is full. You reached this goal!")
+
+    # Piggy bank visual (simple but clear)
+    with cols[1]:
+        if progress < 0.25:
+            stage = "starting out"
+            pig = "🐷"
+        elif progress < 0.5:
+            stage = "about one quarter full"
+            pig = "🐷🪙"
+        elif progress < 0.75:
+            stage = "about half full"
+            pig = "🐷🪙🪙"
+        elif progress < 1.0:
+            stage = "almost full"
+            pig = "🐷🪙🪙🪙"
+        else:
+            stage = "completely full"
+            pig = "🐷💰"
+
+        st.markdown(
+            f"""
+            <div style="text-align:center; font-size:3rem; margin-top:0.5rem;">
+                {pig}
+            </div>
+            <p style="text-align:center; color:#4b5563;">
+                Your piggy bank is <b>{stage}</b> based on your uploaded statements.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("----")
+    st.subheader("Adjust goal")
+
+    with st.form("update_goal_form"):
+        new_name = st.text_input("Goal name", value=goal.name)
+        new_target_str = st.text_input("Target amount", value=str(goal.target_amount))
+        new_target_date = st.text_input(
+            "Target date (optional)",
+            value=goal.target_date or "",
+        )
+        update_submitted = st.form_submit_button("Update goal")
+
+    if update_submitted:
+        try:
+            new_target = float(new_target_str)
+            if new_target <= 0:
+                st.error("Target amount must be positive.")
+            else:
+                goal.name = new_name or goal.name
+                goal.target_amount = new_target
+                goal.target_date = new_target_date or None
+                st.success("Goal updated.")
+                st.rerun()
+        except ValueError:
+            st.error("Please enter a numeric target amount.")
+
+def render_settings_page():
+    require_auth()
+    user = get_current_user()
+    st.title("Settings")
+
+    if not user:
+        st.info("No user loaded.")
+        return
+
+    st.subheader("Profile")
+
+    with st.form("settings_profile_form"):
+        new_name = st.text_input("Display name", value=user.name)
+        new_email = st.text_input("Email (cannot be changed here)", value=user.email, disabled=True)
+        submitted = st.form_submit_button("Save changes")
+
+    if submitted:
+        user.name = new_name or user.name
+        st.success("Profile updated for this session.")
 
 def render_placeholder_page(title: str, text: str):
     require_auth()
     st.title(title)
     st.info(text)
-
 
 # ===================== SIMPLE HEADER =====================
 
@@ -916,7 +1081,7 @@ else:
 
     # Tabs navigation (acts like overhead nav)
     tab_dashboard, tab_reports, tab_history, tab_goals, tab_settings = st.tabs(
-        ["Dashboard", "Reports", "History", "Goals (future)", "Settings (future)"]
+        ["Dashboard", "Reports", "History", "Goals", "Settings"]
     )
 
     with tab_dashboard:
@@ -929,10 +1094,10 @@ else:
         render_history_page()
 
     with tab_goals:
-        render_placeholder_page("Goals", "Goal tracking features will be added later.")
+        render_goals_page()
 
     with tab_settings:
-        render_placeholder_page("Settings", "Account and app settings will be added later.")
+        render_settings_page()
 
     # Footer
     st.markdown(
