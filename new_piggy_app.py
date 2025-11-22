@@ -627,7 +627,28 @@ def get_ai_feedback_gemini(spending_list):
     response = model.generate_content(prompt)
 
     return response.text
+def get_gemini_api_key() -> Optional[str]:
+    """Return Gemini API key from Streamlit secrets or environment variable."""
+    api_key = None
 
+    # Try Streamlit secrets first
+    try:
+        api_key = st.secrets["gemini"]["API_KEY"]
+    except Exception:
+        api_key = None
+
+    # Fallback to environment variable if secrets are not set
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        st.warning(
+            "Gemini API key not found. Please add it to .streamlit/secrets.toml "
+            'under [gemini] API_KEY = "..." or set GEMINI_API_KEY in your environment.'
+        )
+        return None
+
+    return api_key
 def login(email: str, password: str) -> bool:
     email = normalize_email(email)
     user_store = get_user_store()
@@ -802,31 +823,19 @@ def parse_spending(text: str):
 
 
 def get_ai_feedback_gemini(spending_list):
-    import google.generativeai as genai
-    genai.configure(api_key=st.secrets["gemini"]["API_KEY"])
+    # Get API key safely
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return "AI feedback is currently unavailable because the Gemini API key is not configured."
 
-    # Use a model your environment actually supports
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
+    genai.configure(api_key=api_key)
+
+    # Use a model supported by v1beta
+    model = genai.GenerativeModel("gemini-pro")
 
     formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
+    ...
 
-    prompt = f"""
-    The user has the following spending amounts:
-
-    {formatted}
-
-    Analyze this credit summary and provide:
-    - Clear spending insights
-    - Identify spending categories (food, travel, subscriptions, etc.)
-    - Detect overspending patterns
-    - Offer budgeting suggestions
-    - Give simple, friendly advice
-
-    Keep your explanation short, helpful, and easy to read.
-    """
-
-    response = model.generate_content(prompt)
-    return response.text
 
 def render_dashboard_page():
     require_auth()
