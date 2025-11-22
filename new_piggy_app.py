@@ -1,4 +1,4 @@
-import streamlit as st  # type: ignore
+import streamlit as st  # type: gnore
 import pandas as pd  # type: ignore
 import re
 from io import BytesIO
@@ -177,7 +177,19 @@ def save_users_to_file(user_store):
     serializable = {}
 
     for email, user in user_store.items():
-        serializable[email] = asdict(user)
+        u_dict = asdict(user)
+
+        # Convert history upload_time to ISO strings
+        history_list = []
+        for h in u_dict.get("history", []):
+            h_copy = h.copy()
+            ut = h_copy.get("upload_time")
+            if isinstance(ut, datetime):
+                h_copy["upload_time"] = ut.isoformat()
+            history_list.append(h_copy)
+        u_dict["history"] = history_list
+
+        serializable[email] = u_dict
 
     with open(USER_DATA_FILE, "w") as f:
         json.dump(serializable, f, indent=4)
@@ -193,14 +205,35 @@ def load_users_from_file():
     loaded = {}
 
     for email, u in data.items():
+        # Safely get optional fields
+        accounts_raw = u.get("accounts", [])
+        history_raw = u.get("history", [])
+        goals_raw = u.get("goals", [])
+
+        accounts = [FinancialAccount(**acc) for acc in accounts_raw]
+
+        history = []
+        for h in history_raw:
+            h_copy = h.copy()
+            ut = h_copy.get("upload_time")
+            if isinstance(ut, str):
+                try:
+                    h_copy["upload_time"] = datetime.fromisoformat(ut)
+                except ValueError:
+                    # Fall back to now if parsing fails
+                    h_copy["upload_time"] = datetime.now()
+            history.append(StatementHistoryItem(**h_copy))
+
+        goals = [Goal(**g) for g in goals_raw]
+
         loaded[email] = User(
             user_id=u["user_id"],
             name=u["name"],
             email=u["email"],
             password=u["password"],
-            accounts=[FinancialAccount(**acc) for acc in u["accounts"]],
-            history=[StatementHistoryItem(**h) for h in u["history"]],
-            goals=[Goal(**g) for g in u["goals"]],
+            accounts=accounts,
+            history=history,
+            goals=goals,
         )
 
     return loaded
@@ -926,7 +959,7 @@ def render_reports_page():
     require_auth()
     st.title("Spending report and Piggy AI")
 
-    st.write("Upload a credit card or bank statement in **PDF or CSV** format.")
+    st.write("Upload a credit card or bank statement in PDF or CSV format.")
 
     uploaded_file = st.file_uploader("Upload statement (PDF or CSV)", type=["pdf", "csv"])
 
@@ -946,11 +979,14 @@ def render_reports_page():
                 st.error("No transactions detected.")
                 return
 
+            # Save transactions for this session
             st.session_state.transactions = transactions
+
+            # Analyze
             analysis = SpendingAnalyzer.analyze(transactions)
             st.session_state.analysis = analysis
 
-            # Save history
+            # Save history permanently
             user = get_current_user()
             if user is not None:
                 item = StatementHistoryItem(
@@ -961,9 +997,15 @@ def render_reports_page():
                 )
                 user.history.append(item)
 
+                # Persist to disk so it is remembered across reloads
+                user_store = get_user_store()
+                save_users_to_file(user_store)
+
+            # Recommendation
             rec = RecommendationEngine.generate(analysis)
             st.session_state.recommendation = rec
 
+        # Show detected transactions
         df = pd.DataFrame(
             [{
                 "Date": t.date,
@@ -976,8 +1018,7 @@ def render_reports_page():
         st.subheader("Detected transactions")
         st.dataframe(df.head(30))
 
-        # Category breakdown table (more forms of data)
-        analysis = st.session_state.analysis
+        # Category table
         if analysis and analysis["by_category"]:
             st.subheader("Category breakdown")
             total_spent = analysis["total_spent"]
@@ -990,6 +1031,7 @@ def render_reports_page():
             cat_df = pd.DataFrame(rows).sort_values("Amount", ascending=False)
             st.dataframe(cat_df)
 
+    # Show recommendation
     rec = st.session_state.recommendation
     if rec:
         st.subheader(rec.title)
@@ -1060,6 +1102,10 @@ def render_goals_page():
                         target_date=target_date or None,
                     )
                     user.goals.append(new_goal)
+
+                    # persist
+                    save_users_to_file(get_user_store())
+
                     st.success("Goal created.")
                     st.rerun()
             except ValueError:
@@ -1140,6 +1186,9 @@ def render_goals_page():
                 goal.name = new_name or goal.name
                 goal.target_amount = new_target
                 goal.target_date = new_target_date or None
+
+                save_users_to_file(get_user_store())
+
                 st.success("Goal updated.")
                 st.rerun()
         except ValueError:
