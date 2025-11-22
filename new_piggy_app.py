@@ -9,6 +9,10 @@ import copy
 
 from PyPDF2 import PdfReader  # type: ignore
 
+import pdfplumber
+import re
+import google.generativeai as genai
+
 # ===================== PAGE CONFIG =====================
 
 st.set_page_config(
@@ -628,6 +632,27 @@ def get_current_user() -> Optional[User]:
         return user_store.get(email)
     return None
 
+def get_ai_feedback_gemini(spending_list):
+    genai.configure(api_key=st.secrets["gemini"]["API_KEY"])
+
+    model = genai.GenerativeModel("gemini-1.5-flash")
+
+    # Convert spending list to readable text
+    formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
+
+    prompt = f"""
+    The user has the following spending amounts:
+
+    {formatted}
+
+    Provide clear, simple budgeting feedback.
+    Identify overspending, patterns, and ways they can save money.
+    Keep the tone friendly and helpful.
+    """
+
+    response = model.generate_content(prompt)
+
+    return response.text
 
 def login(email: str, password: str) -> bool:
     email = normalize_email(email)
@@ -780,6 +805,55 @@ def render_login_page():
                     if st.session_state.show_debug:
                         st.error(f"Debug: {st.session_state.debug_info}")
 
+def extract_text_from_pdf(uploaded_file):
+    try:
+        with pdfplumber.open(uploaded_file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        return text
+    except Exception:
+        return None
+
+
+def parse_spending(text: str):
+    pattern = r"([A-Za-z ]+)\s+\$?(\d+\.\d{2})"
+    results = re.findall(pattern, text)
+
+    spending = []
+    for category, amount in results:
+        spending.append((category.strip(), float(amount)))
+    return spending
+
+
+def get_ai_feedback_gemini(spending_list):
+    import google.generativeai as genai
+    genai.configure(api_key=st.secrets["gemini"]["API_KEY"])
+
+    # Use a model your environment actually supports
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
+
+    formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
+
+    prompt = f"""
+    The user has the following spending amounts:
+
+    {formatted}
+
+    Analyze this credit summary and provide:
+    - Clear spending insights
+    - Identify spending categories (food, travel, subscriptions, etc.)
+    - Detect overspending patterns
+    - Offer budgeting suggestions
+    - Give simple, friendly advice
+
+    Keep your explanation short, helpful, and easy to read.
+    """
+
+    response = model.generate_content(prompt)
+    return response.text
 
 def render_dashboard_page():
     require_auth()
@@ -1157,8 +1231,8 @@ else:
     st.markdown("---")
 
     # Tabs navigation (acts like overhead nav)
-    tab_dashboard, tab_reports, tab_history, tab_goals, tab_settings = st.tabs(
-        ["Dashboard", "Reports", "History", "Goals", "Settings"]
+    tab_dashboard, tab_reports, tab_history, tab_goals, tab_settings, tab_ai = st.tabs(
+        ["Dashboard", "Reports", "History", "Goals", "Settings", "AI Feedback"]
     )
 
     with tab_dashboard:
@@ -1175,6 +1249,30 @@ else:
 
     with tab_settings:
         render_settings_page()
+
+    with tab_ai:
+        st.header("AI Spending Feedback")
+
+        uploaded = st.file_uploader("Upload your credit summary (PDF)", type="pdf")
+
+        if uploaded:
+            text = extract_text_from_pdf(uploaded)
+
+            if not text:
+                st.error("Could not extract text from the PDF.")
+            else:
+                spending = parse_spending(text)
+
+                # OPTIONAL collapsible table
+                with st.expander("Spending Breakdown"):
+                    df = pd.DataFrame(spending, columns=["Category", "Amount ($)"])
+                    st.dataframe(df, use_container_width=True)
+
+                if st.button("Generate AI Feedback"):
+                    with st.spinner("Analyzing your spending..."):
+                        advice = get_ai_feedback_gemini(spending)
+                    st.subheader("AI Suggestions")
+                    st.write(advice)
 
     # Footer
     st.markdown(
