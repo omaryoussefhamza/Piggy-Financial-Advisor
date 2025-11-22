@@ -2,16 +2,26 @@ import streamlit as st  # type: ignore
 import pandas as pd  # type: ignore
 import re
 from io import BytesIO
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import copy
 
 from PyPDF2 import PdfReader  # type: ignore
 
+# ai imports
 import pdfplumber
 import re
 import google.generativeai as genai
+
+# user data imports
+from user_storage import load_users_from_file, save_users_to_file
+import json
+import os
+from models import (
+    User, FinancialAccount, StatementHistoryItem, Goal, Transaction, Recommendation
+)
+
 
 # ===================== PAGE CONFIG =====================
 
@@ -126,77 +136,6 @@ def inject_global_styles():
 
 # ===================== DOMAIN MODEL =====================
 
-@dataclass
-class Transaction:
-    transaction_id: str
-    date: Optional[str]
-    description: str
-    amount: float
-    category: str = "Other"
-
-    def is_debit(self) -> bool:
-        return self.amount < 0
-
-
-@dataclass
-class SpendingCategory:
-    category_id: str
-    name: str
-    monthly_budget: Optional[float] = None
-
-
-@dataclass
-class Recommendation:
-    recommendation_id: str
-    title: str
-    description: str
-    generation_date: datetime
-
-
-@dataclass
-class StatementHistoryItem:
-    statement_id: str
-    upload_time: datetime
-    total_income: float
-    total_spent: float
-
-@dataclass
-class Goal:
-    goal_id: str
-    name: str
-    target_amount: float
-    current_amount: float = 0.0
-    target_date: Optional[str] = None
-
-@dataclass
-class FinancialAccount:
-    account_id: str
-    institution_name: str
-    account_type: str
-    current_balance: float = 0.0
-    transactions: List[Transaction] = field(default_factory=list)
-
-    def add_transaction(self, tx: Transaction) -> None:
-        self.transactions.append(tx)
-
-@dataclass
-class User:
-    user_id: str
-    name: str
-    email: str
-    password: str  # plain for demo only
-    accounts: List[FinancialAccount] = field(default_factory=list)
-    history: List[StatementHistoryItem] = field(default_factory=list)
-    goals: List[Goal] = field(default_factory=list)
-
-    def check_password(self, pwd: str) -> bool:
-        return self.password == pwd
-
-    def get_primary_account(self) -> Optional[FinancialAccount]:
-        if self.accounts:
-            return self.accounts[0]
-        return None
-
 
 # Initial user store
 INITIAL_USER_STORE = {
@@ -232,12 +171,50 @@ INITIAL_USER_STORE = {
 def normalize_email(email: str) -> str:
     return email.strip().lower()
 
+USER_DATA_FILE = "users.json"
+
+def save_users_to_file(user_store):
+    serializable = {}
+
+    for email, user in user_store.items():
+        serializable[email] = asdict(user)
+
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(serializable, f, indent=4)
+
+
+def load_users_from_file():
+    if not os.path.exists(USER_DATA_FILE):
+        return None
+
+    with open(USER_DATA_FILE, "r") as f:
+        data = json.load(f)
+
+    loaded = {}
+
+    for email, u in data.items():
+        loaded[email] = User(
+            user_id=u["user_id"],
+            name=u["name"],
+            email=u["email"],
+            password=u["password"],
+            accounts=[FinancialAccount(**acc) for acc in u["accounts"]],
+            history=[StatementHistoryItem(**h) for h in u["history"]],
+            goals=[Goal(**g) for g in u["goals"]],
+        )
+
+    return loaded
 
 def get_user_store() -> Dict[str, User]:
-    """Get the user store from session state, initialize if not exists"""
     if "user_store" not in st.session_state:
-        # Deep copy the initial users to avoid reference issues
-        st.session_state.user_store = copy.deepcopy(INITIAL_USER_STORE)
+        loaded = load_users_from_file()
+
+        if loaded is not None:
+            st.session_state.user_store = loaded
+        else:
+            st.session_state.user_store = copy.deepcopy(INITIAL_USER_STORE)
+            save_users_to_file(st.session_state.user_store)
+
     return st.session_state.user_store
 
 
@@ -619,9 +596,6 @@ def init_session_state():
         st.session_state.debug_info = ""
     if "show_debug" not in st.session_state:
         st.session_state.show_debug = False
-    # Initialize user store in session state
-    if "user_store" not in st.session_state:
-        st.session_state.user_store = copy.deepcopy(INITIAL_USER_STORE)
 
 
 def get_current_user() -> Optional[User]:
@@ -688,7 +662,7 @@ def register_user(name: str, email: str, password: str) -> bool:
     user_store = get_user_store()
 
     if email in user_store:
-        st.session_state.debug_info = f"❌ Email already exists: '{email}'\nAvailable users: {list(user_store.keys())}"
+        st.session_state.debug_info = f"❌ Email already exists: '{email}'"
         return False
 
     new_id = f"u{len(user_store) + 1}"
@@ -697,19 +671,18 @@ def register_user(name: str, email: str, password: str) -> bool:
         name=name,
         email=email,
         password=password,
-        accounts=[
-            FinancialAccount(
-                account_id=f"acc{len(user_store) + 1}",
-                institution_name="Demo Bank",
-                account_type="Credit Card",
-            )
-        ],
+        accounts=[FinancialAccount(
+            account_id=f"acc{len(user_store) + 1}",
+            institution_name="Demo Bank",
+            account_type="Credit Card",
+        )],
     )
-    # Store in session state user store
+
     user_store[email] = new_user
-    st.session_state.user_store = user_store  # Ensure it's stored back
-    
-    st.session_state.debug_info = f"✅ User registered successfully: '{email}'\nAvailable users: {list(user_store.keys())}"
+    st.session_state.user_store = user_store
+
+    save_users_to_file(user_store)  # ← persist to disk
+
     return True
 
 

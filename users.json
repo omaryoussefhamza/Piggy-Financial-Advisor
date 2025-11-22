@@ -1,0 +1,53 @@
+{
+    "niya@piggy.com": {
+        "user_id": "u1",
+        "name": "Niya",
+        "email": "niya@piggy.com",
+        "password": "test123",
+        "accounts": [
+            {
+                "account_id": "acc1",
+                "institution_name": "Demo Bank",
+                "account_type": "Credit Card",
+                "current_balance": 0.0,
+                "transactions": []
+            }
+        ],
+        "history": [],
+        "goals": []
+    },
+    "demo@piggy.com": {
+        "user_id": "u2",
+        "name": "Demo User",
+        "email": "demo@piggy.com",
+        "password": "demo123",
+        "accounts": [
+            {
+                "account_id": "acc2",
+                "institution_name": "Demo Bank",
+                "account_type": "Credit Card",
+                "current_balance": 0.0,
+                "transactions": []
+            }
+        ],
+        "history": [],
+        "goals": []
+    },
+    "omar@testing.ca": {
+        "user_id": "u3",
+        "name": "omar y",
+        "email": "omar@testing.ca",
+        "password": "1111",
+        "accounts": [
+            {
+                "account_id": "acc3",
+                "institution_name": "Demo Bank",
+                "account_type": "Credit Card",
+                "current_balance": 0.0,
+                "transactions": []
+            }
+        ],
+        "history": [],
+        "goals": []
+    }
+}
