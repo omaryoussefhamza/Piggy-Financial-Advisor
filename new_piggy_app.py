@@ -1176,17 +1176,19 @@ def render_history_page():
 
             # Delete button for this statement
             with cols[3]:
-                if st.button("Delete", key=f"delete_{item.statement_id}"):
-                    # Remove from the user's history
+        
+            # Ensure each delete button has a unique key based on statement_id and timestamp
+                if st.button("Delete", key=f"delete_button_{item.statement_id}_{item.upload_time.timestamp()}"):
+                # Remove from the user's history
                     user.history = [
                         h for h in user.history if h.statement_id != item.statement_id
                     ]
 
-                    # Persist the change
-                    save_users_to_file(get_user_store())
+        # Persist the change
+        save_users_to_file(get_user_store())
 
-                    st.success(f"Deleted {item.statement_id}.")
-                    st.rerun()
+        st.success(f"Deleted {item.statement_id}.")
+        st.rerun()
 
         st.markdown("---")
 
