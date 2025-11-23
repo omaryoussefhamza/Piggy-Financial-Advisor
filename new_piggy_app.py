@@ -32,21 +32,30 @@ st.set_page_config(
 
 # Piggy colour palette (soft pink accent)
 PRIMARY_COLOR = "#f97373"
-
+ACCENT_DARK = "#1f2933"
+BACKGROUND_LIGHT = "#fff8f8"
 
 def inject_global_styles():
-    """Injects global CSS to make the app look more polished."""
+    """Injects global CSS to make the app look more polished and on brand."""
     st.markdown(
         f"""
         <style>
         :root {{
             --piggy-primary: {PRIMARY_COLOR};
+            --piggy-accent-dark: {ACCENT_DARK};
+            --piggy-bg-light: {BACKGROUND_LIGHT};
         }}
 
-        /* Overall page tweaks */
+        /* Overall page */
+        body {{
+            background: radial-gradient(circle at top left, #ffe5e5 0, #ffffff 40%, #ffeef0 100%);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        }}
+
         .block-container {{
             max-width: 1100px;
-            padding-top: 3rem;              /* more space at top so logo isn't cut */
+            padding-top: 2.5rem;
+            padding-bottom: 1.5rem;
         }}
 
         /* Header bar */
@@ -54,30 +63,44 @@ def inject_global_styles():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.8rem 1.0rem 0.7rem 1.0rem;
-            margin-top: 0.2rem;
-            margin-bottom: 0.8rem;
-            border-radius: 0.75rem;
-            background: #fff7f7;            /* light pink background to stand out */
-            border: 1px solid #ffe4e4;
+            padding: 0.9rem 1.2rem;
+            margin-top: 0.3rem;
+            margin-bottom: 1.0rem;
+            border-radius: 1.0rem;
+            background: rgba(255, 248, 248, 0.92);
+            border: 1px solid #ffe1e6;
+            box-shadow: 0 10px 30px rgba(249, 115, 115, 0.12);
         }}
         .piggy-brand {{
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.6rem;
         }}
         .piggy-logo {{
-            font-size: 1.7rem;              /* slightly bigger pig */
-            line-height: 1;
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, {PRIMARY_COLOR}, #fbb6b6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.7rem;
+            box-shadow: 0 6px 16px rgba(249, 115, 115, 0.45);
+        }}
+        .piggy-title-block {{
+            display: flex;
+            flex-direction: column;
         }}
         .piggy-title {{
-            font-weight: 700;
-            font-size: 1.25rem;
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: var(--piggy-accent-dark);
+            letter-spacing: 0.02em;
         }}
         .piggy-tagline {{
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: #6b7280;
-            margin-left: 0.4rem;
+            margin-top: 0.05rem;
         }}
         .piggy-user {{
             font-size: 0.85rem;
@@ -88,42 +111,81 @@ def inject_global_styles():
         .piggy-kpi-row {{
             display: flex;
             flex-wrap: wrap;
-            gap: 0.9rem;
-            margin-top: 0.6rem;
-            margin-bottom: 0.6rem;
+            gap: 1.0rem;
+            margin-top: 0.8rem;
+            margin-bottom: 0.8rem;
         }}
         .piggy-kpi-card {{
-            flex: 1 1 200px;
-            background: #f9fafb;
-            border-radius: 0.8rem;
+            flex: 1 1 230px;
+            background: #ffffff;
+            border-radius: 0.9rem;
             border: 1px solid #e5e7eb;
-            padding: 0.75rem 1rem;
+            padding: 0.85rem 1.0rem;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
         }}
         .piggy-kpi-label {{
             font-size: 0.8rem;
             color: #6b7280;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.15rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }}
         .piggy-kpi-value {{
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--piggy-accent-dark);
         }}
         .piggy-kpi-sub {{
             font-size: 0.75rem;
             color: #9ca3af;
-            margin-top: 0.1rem;
+            margin-top: 0.25rem;
         }}
 
         /* Tabs styling */
+        [data-testid="stTabs"] button[role="tab"] {{
+            font-size: 0.88rem;
+            padding-top: 0.6rem;
+            padding-bottom: 0.6rem;
+        }}
         [data-testid="stTabs"] button[aria-selected="true"] {{
             color: var(--piggy-primary);
             border-bottom: 2px solid var(--piggy-primary);
+            font-weight: 600;
+        }}
+        [data-testid="stTabs"] button[aria-selected="false"] {{
+            color: #6b7280;
+        }}
+
+        /* File uploader and widgets */
+        .stFileUploader label {{
+            font-weight: 600;
+            color: var(--piggy-accent-dark);
+        }}
+        .stButton>button {{
+            border-radius: 999px;
+            background: var(--piggy-primary);
+            color: white;
+            border: none;
+            padding: 0.4rem 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(249, 115, 115, 0.35);
+        }}
+        .stButton>button:hover {{
+            filter: brightness(1.05);
+        }}
+
+        /* Dataframes */
+        .stDataFrame, .stTable {{
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
         }}
 
         /* Footer */
         .piggy-footer {{
             margin-top: 1.5rem;
-            padding-bottom: 0.6rem;
+            padding-bottom: 0.8rem;
             font-size: 0.75rem;
             color: #9ca3af;
             text-align: center;
@@ -132,7 +194,6 @@ def inject_global_styles():
         """,
         unsafe_allow_html=True,
     )
-
 
 # ===================== DOMAIN MODEL =====================
 
@@ -639,27 +700,6 @@ def get_current_user() -> Optional[User]:
         return user_store.get(email)
     return None
 
-def get_ai_feedback_gemini(spending_list):
-    genai.configure(api_key=st.secrets["gemini"]["API_KEY"])
-
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
-    # Convert spending list to readable text
-    formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
-
-    prompt = f"""
-    The user has the following spending amounts:
-
-    {formatted}
-
-    Provide clear, simple budgeting feedback.
-    Identify overspending, patterns, and ways they can save money.
-    Keep the tone friendly and helpful.
-    """
-
-    response = model.generate_content(prompt)
-
-    return response.text
 def get_gemini_api_key() -> Optional[str]:
     """Return Gemini API key from Streamlit secrets or environment variable."""
     api_key = None
@@ -854,59 +894,112 @@ def parse_spending(text: str):
         spending.append((category.strip(), float(amount)))
     return spending
 
-
 def get_ai_feedback_gemini(spending_list):
-    # Get API key safely
+    """Call Gemini and return friendly budgeting advice."""
     api_key = get_gemini_api_key()
     if not api_key:
         return "AI feedback is currently unavailable because the Gemini API key is not configured."
 
+    # Configure client
     genai.configure(api_key=api_key)
 
-    # Use a model supported by v1beta
-    model = genai.GenerativeModel("gemini-pro")
-
+    # Format spending into text for the prompt
     formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
-    ...
 
+    prompt = f"""
+    The user has the following spending amounts:
+
+    {formatted}
+
+    Provide clear and simple budgeting feedback.
+    Identify overspending, patterns, and ways they can save money.
+    Keep the tone friendly and helpful.
+    """
+
+    # Try a couple of model ids that work with different library versions
+    possible_models = [
+        "models/gemini-1.5-flash",
+        "models/gemini-1.5-pro",
+        "models/gemini-pro",
+    ]
+
+    last_error = None
+
+    for model_name in possible_models:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            last_error = e
+            continue
+
+    # If all models fail, fall back to a simple hard coded message
+    st.warning(f"AI feedback is temporarily unavailable ({last_error}). Showing basic guidance instead.")
+
+    # Very simple fallback advice
+    total = sum(amt for _, amt in spending_list)
+    top_cat = None
+    if spending_list:
+        top_cat = max(spending_list, key=lambda x: x[1])[0]
+
+    lines = []
+    lines.append(f"In this period your total tracked spending is about ${total:,.2f}.")
+    if top_cat:
+        lines.append(f"Your highest spending category appears to be {top_cat}.")
+        lines.append(f"Consider setting a monthly limit for {top_cat} and moving anything above that into savings.")
+    else:
+        lines.append("Consider setting a simple monthly budget and tracking a few key categories like food, transport, and fun.")
+
+    return " ".join(lines)
 
 def render_dashboard_page():
     require_auth()
     user = get_current_user()
     st.title("Dashboard")
-    st.caption("Quick overview of your latest statement and spending.")
+    st.caption("Quick overview of your spending and goals in Piggy.")
 
     if user:
-        st.write(f"Welcome, **{user.name}**.")
+        st.write(f"Welcome back, **{user.name}**.")
     else:
         st.write("Welcome.")
 
-    if not st.session_state.transactions:
-        st.info("No statement uploaded yet. Go to the Reports page to upload a statement.")
-        return
+    # If there is no current analysis in the session,
+    # try to restore it from the latest statement in user history.
+    if st.session_state.analysis is None and user and user.history:
+        # Take the most recent statement by upload_time
+        latest_item = sorted(user.history, key=lambda h: h.upload_time)[-1]
 
-    tx_list: List[Transaction] = st.session_state.transactions
-    df = pd.DataFrame(
-        [{"Date": t.date, "Description": t.description, "Amount": t.amount, "Category": t.category} for t in tx_list]
-    )
+        st.session_state.analysis = {
+            "total_income": latest_item.total_income,
+            "total_spent": latest_item.total_spent,
+            # We did not store category breakdown in history yet,
+            # so keep this empty for now.
+            "by_category": {},
+        }
 
     analysis = st.session_state.analysis
 
-    # KPI cards row
+    # If we still have no analysis and no transactions, there is nothing to show
+    if analysis is None and not st.session_state.transactions:
+        st.info("No statement data found yet. Go to the Reports tab to upload your first statement.")
+        return
+
+    # KPI cards using whatever analysis we have
     if analysis:
-        total_spent = analysis["total_spent"]
-        total_income = analysis["total_income"]
+        total_spent = analysis.get("total_spent", 0.0)
+        total_income = analysis.get("total_income", 0.0)
+        by_category = analysis.get("by_category", {}) or {}
+
         savings_pct = None
         if total_income > 0:
             savings_pct = (total_income - total_spent) / total_income * 100
 
-        # Find top spending category
-        top_cat_label = "—"
-        top_cat_detail = ""
-        if analysis["by_category"] and total_spent > 0:
-            sorted_cats = sorted(
-                analysis["by_category"].items(), key=lambda kv: kv[1], reverse=True
-            )
+        # Top category, only if we actually have category data for this session
+        top_cat_label = "Not available"
+        top_cat_detail = "Upload a new statement to see category breakdown."
+        if by_category and total_spent > 0:
+            sorted_cats = sorted(by_category.items(), key=lambda kv: kv[1], reverse=True)
             top_name, top_val = sorted_cats[0]
             share = top_val / total_spent * 100
             top_cat_label = top_name
@@ -915,21 +1008,21 @@ def render_dashboard_page():
         kpi_html = f"""
         <div class="piggy-kpi-row">
             <div class="piggy-kpi-card">
-                <div class="piggy-kpi-label">Total spent (this statement)</div>
+                <div class="piggy-kpi-label">Total spent (latest statement)</div>
                 <div class="piggy-kpi-value">${total_spent:,.2f}</div>
                 <div class="piggy-kpi-sub">Includes all card purchases and debits.</div>
             </div>
             <div class="piggy-kpi-card">
                 <div class="piggy-kpi-label">Total income detected</div>
                 <div class="piggy-kpi-value">${total_income:,.2f}</div>
-                <div class="piggy-kpi-sub">Based on credits such as payroll and refunds.</div>
+                <div class="piggy-kpi-sub">Credits such as payroll and refunds.</div>
             </div>
             <div class="piggy-kpi-card">
                 <div class="piggy-kpi-label">Estimated savings rate</div>
                 <div class="piggy-kpi-value">
                     {f"{savings_pct:.1f}%" if savings_pct is not None else "N/A"}
                 </div>
-                <div class="piggy-kpi-sub">Approximate (income − spending) ÷ income.</div>
+                <div class="piggy-kpi-sub">Roughly (income - spending) ÷ income for this period.</div>
             </div>
             <div class="piggy-kpi-card">
                 <div class="piggy-kpi-label">Top spending category</div>
@@ -940,19 +1033,35 @@ def render_dashboard_page():
         """
         st.markdown(kpi_html, unsafe_allow_html=True)
 
-    st.subheader("Recent transactions")
-    st.dataframe(df.tail(10))
+    # Recent transactions table, only if we actually have them in this session
+    tx_list: List[Transaction] = st.session_state.transactions
+    if tx_list:
+        st.subheader("Recent transactions")
+        df = pd.DataFrame(
+            [{
+                "Date": t.date,
+                "Description": t.description,
+                "Amount": t.amount,
+                "Category": t.category,
+            } for t in tx_list]
+        )
+        st.dataframe(df.tail(10), use_container_width=True)
+    else:
+        st.subheader("Recent transactions")
+        st.info("Upload a new statement on the Reports tab to see a detailed transaction list. "
+                "The summary above is based on your last saved statement.")
 
-    # Simple spending by category chart
-    if analysis and analysis["by_category"]:
+    # Category chart, only if we have per category data (same session only for now)
+    if analysis and analysis.get("by_category"):
         cat_df = pd.DataFrame(
             [{"Category": k, "Spend": v} for k, v in analysis["by_category"].items()]
         ).sort_values("Spend", ascending=False)
-
         st.subheader("Spending by category")
         st.bar_chart(cat_df.set_index("Category"))
     else:
-        st.info("No category-level spending to display yet.")
+        st.subheader("Spending by category")
+        st.info("Category breakdown will appear after you upload a new statement.")
+
 
 
 def render_reports_page():
@@ -1226,9 +1335,11 @@ def render_piggy_header(user_name: Optional[str]):
         f"""
         <div class="piggy-header">
             <div class="piggy-brand">
-                <span class="piggy-logo">🐷</span>
-                <span class="piggy-title">Piggy</span>
-                <span class="piggy-tagline">our Smarter Piggy Bank</span>
+                <div class="piggy-logo">🐷</div>
+                <div class="piggy-title-block">
+                    <span class="piggy-title">Piggy</span>
+                    <span class="piggy-tagline">Your smarter online piggy bank</span>
+                </div>
             </div>
             <div class="piggy-user">
                 {"Logged in as <b>" + user_name + "</b>" if user_name else ""}
@@ -1251,7 +1362,7 @@ else:
     user = get_current_user()
     user_name = user.name if user else None
 
-    # Simple header with brand + user
+    # Header
     render_piggy_header(user_name)
 
     # Logout button under header
@@ -1261,7 +1372,7 @@ else:
 
     st.markdown("---")
 
-    # Tabs navigation (acts like overhead nav)
+    # Tabs navigation
     tab_dashboard, tab_reports, tab_history, tab_goals, tab_settings, tab_ai = st.tabs(
         ["Dashboard", "Reports", "History", "Goals", "Settings", "AI Feedback"]
     )
@@ -1294,15 +1405,14 @@ else:
             else:
                 spending = parse_spending(text)
 
-                # OPTIONAL collapsible table
-                with st.expander("Spending Breakdown"):
+                with st.expander("Spending breakdown"):
                     df = pd.DataFrame(spending, columns=["Category", "Amount ($)"])
                     st.dataframe(df, use_container_width=True)
 
-                if st.button("Generate AI Feedback"):
+                if st.button("Generate AI feedback"):
                     with st.spinner("Analyzing your spending..."):
                         advice = get_ai_feedback_gemini(spending)
-                    st.subheader("AI Suggestions")
+                    st.subheader("AI suggestions")
                     st.write(advice)
 
     # Footer
