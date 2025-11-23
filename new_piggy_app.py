@@ -1157,15 +1157,38 @@ def render_history_page():
         st.info("No previous statements found.")
         return
 
-    data = [{
-        "Statement ID": item.statement_id,
-        "Uploaded at": item.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
-        "Total income": item.total_income,
-        "Total spent": item.total_spent,
-    } for item in user.history]
+    # Show most recent first
+    history_sorted = sorted(user.history, key=lambda item: item.upload_time, reverse=True)
 
-    df = pd.DataFrame(data).sort_values("Uploaded at", ascending=False)
-    st.dataframe(df)
+    for item in history_sorted:
+        with st.container():
+            cols = st.columns([3, 2, 2, 1])
+
+            with cols[0]:
+                st.markdown(
+                    f"**{item.statement_id}**  \n"
+                    f"{item.upload_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+            with cols[1]:
+                st.markdown(f"**Total spent:** ${item.total_spent:,.2f}")
+            with cols[2]:
+                st.markdown(f"**Total income:** ${item.total_income:,.2f}")
+
+            # Delete button for this statement
+            with cols[3]:
+                if st.button("Delete", key=f"delete_{item.statement_id}"):
+                    # Remove from the user's history
+                    user.history = [
+                        h for h in user.history if h.statement_id != item.statement_id
+                    ]
+
+                    # Persist the change
+                    save_users_to_file(get_user_store())
+
+                    st.success(f"Deleted {item.statement_id}.")
+                    st.rerun()
+
+        st.markdown("---")
 
 def render_goals_page():
     require_auth()
@@ -1393,27 +1416,37 @@ else:
         render_settings_page()
 
     with tab_ai:
+        require_auth()
+        user = get_current_user()
         st.header("AI Spending Feedback")
 
-        uploaded = st.file_uploader("Upload your credit summary (PDF)", type="pdf")
+        if not user or not user.history:
+            st.info("Upload at least one statement on the Reports tab so I can analyze your spending history.")
+        else:
+            # Sort statements oldest to newest so the AI sees the trend in order
+            history_sorted = sorted(user.history, key=lambda h: h.upload_time)
 
-        if uploaded:
-            text = extract_text_from_pdf(uploaded)
+            # Build a spending list that covers all statements
+            spending_list = []
+            for idx, item in enumerate(history_sorted, start=1):
+                label = f"Statement {idx} ({item.upload_time.strftime('%Y-%m-%d')})"
+                spending_list.append((label, item.total_spent))
 
-            if not text:
-                st.error("Could not extract text from the PDF.")
-            else:
-                spending = parse_spending(text)
+            st.subheader("Statements included in AI analysis")
+            df = pd.DataFrame(
+                [{
+                    "Statement": label,
+                    "Total spent": amount,
+                    "Total income": history_sorted[i].total_income,
+                } for i, (label, amount) in enumerate(spending_list)]
+            )
+            st.dataframe(df, use_container_width=True)
 
-                with st.expander("Spending breakdown"):
-                    df = pd.DataFrame(spending, columns=["Category", "Amount ($)"])
-                    st.dataframe(df, use_container_width=True)
-
-                if st.button("Generate AI feedback"):
-                    with st.spinner("Analyzing your spending..."):
-                        advice = get_ai_feedback_gemini(spending)
-                    st.subheader("AI suggestions")
-                    st.write(advice)
+            if st.button("Generate AI feedback"):
+                with st.spinner("Analyzing your spending history..."):
+                    advice = get_ai_feedback_gemini(spending_list)
+                st.subheader("AI suggestions")
+                st.write(advice)
 
     # Footer
     st.markdown(
