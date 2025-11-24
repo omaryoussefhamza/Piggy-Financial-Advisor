@@ -1,4 +1,4 @@
-import streamlit as st  # type: gnore
+import streamlit as st  # type: ignore
 import pandas as pd  # type: ignore
 import re
 from io import BytesIO
@@ -6,6 +6,12 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import copy
+import time
+
+# Visualization imports
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from PyPDF2 import PdfReader  # type: ignore
 
@@ -36,163 +42,58 @@ ACCENT_DARK = "#1f2933"
 BACKGROUND_LIGHT = "#fff8f8"
 
 def inject_global_styles():
-    """Injects global CSS to make the app look more polished and on brand."""
     st.markdown(
-        f"""
+        """
         <style>
-        :root {{
-            --piggy-primary: {PRIMARY_COLOR};
-            --piggy-accent-dark: {ACCENT_DARK};
-            --piggy-bg-light: {BACKGROUND_LIGHT};
-        }}
-
-        /* Overall page */
-        body {{
-            background: radial-gradient(circle at top left, #ffe5e5 0, #ffffff 40%, #ffeef0 100%);
-            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-        }}
-
-        .block-container {{
-            max-width: 1100px;
-            padding-top: 2.5rem;
-            padding-bottom: 1.5rem;
-        }}
-
-        /* Header bar */
-        .piggy-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.9rem 1.2rem;
-            margin-top: 0.3rem;
-            margin-bottom: 1.0rem;
-            border-radius: 1.0rem;
-            background: rgba(255, 248, 248, 0.92);
-            border: 1px solid #ffe1e6;
-            box-shadow: 0 10px 30px rgba(249, 115, 115, 0.12);
-        }}
-        .piggy-brand {{
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-        }}
-        .piggy-logo {{
-            width: 44px;
-            height: 44px;
-            border-radius: 999px;
-            background: linear-gradient(135deg, {PRIMARY_COLOR}, #fbb6b6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.7rem;
-            box-shadow: 0 6px 16px rgba(249, 115, 115, 0.45);
-        }}
-        .piggy-title-block {{
-            display: flex;
-            flex-direction: column;
-        }}
-        .piggy-title {{
-            font-weight: 800;
-            font-size: 1.3rem;
-            color: var(--piggy-accent-dark);
-            letter-spacing: 0.02em;
-        }}
-        .piggy-tagline {{
-            font-size: 0.8rem;
-            color: #6b7280;
-            margin-top: 0.05rem;
-        }}
-        .piggy-user {{
-            font-size: 0.85rem;
-            color: #4b5563;
-        }}
-
-        /* KPI cards row */
-        .piggy-kpi-row {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1.0rem;
-            margin-top: 0.8rem;
-            margin-bottom: 0.8rem;
-        }}
-        .piggy-kpi-card {{
-            flex: 1 1 230px;
-            background: #ffffff;
-            border-radius: 0.9rem;
-            border: 1px solid #e5e7eb;
-            padding: 0.85rem 1.0rem;
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-        }}
-        .piggy-kpi-label {{
-            font-size: 0.8rem;
-            color: #6b7280;
-            margin-bottom: 0.15rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }}
-        .piggy-kpi-value {{
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--piggy-accent-dark);
-        }}
-        .piggy-kpi-sub {{
-            font-size: 0.75rem;
-            color: #9ca3af;
-            margin-top: 0.25rem;
-        }}
-
-        /* Tabs styling */
-        [data-testid="stTabs"] button[role="tab"] {{
-            font-size: 0.88rem;
-            padding-top: 0.6rem;
-            padding-bottom: 0.6rem;
-        }}
-        [data-testid="stTabs"] button[aria-selected="true"] {{
-            color: var(--piggy-primary);
-            border-bottom: 2px solid var(--piggy-primary);
-            font-weight: 600;
-        }}
-        [data-testid="stTabs"] button[aria-selected="false"] {{
-            color: #6b7280;
-        }}
-
-        /* File uploader and widgets */
-        .stFileUploader label {{
-            font-weight: 600;
-            color: var(--piggy-accent-dark);
-        }}
-        .stButton>button {{
-            border-radius: 999px;
-            background: var(--piggy-primary);
+        .main {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .stApp {
+            background: #f8f9fa;
+        }
+        
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-top: 1rem;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 2px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: #f1f3f4;
+            border-radius: 10px 10px 0px 0px;
+            gap: 1px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background-color: #4f46e5;
             color: white;
-            border: none;
-            padding: 0.4rem 1.1rem;
-            font-weight: 600;
-            box-shadow: 0 8px 20px rgba(249, 115, 115, 0.35);
-        }}
-        .stButton>button:hover {{
-            filter: brightness(1.05);
-        }}
-
-        /* Dataframes */
-        .stDataFrame, .stTable {{
-            border-radius: 0.75rem;
-            overflow: hidden;
-            border: 1px solid #e5e7eb;
-            background: #ffffff;
-        }}
-
-        /* Footer */
-        .piggy-footer {{
-            margin-top: 1.5rem;
-            padding-bottom: 0.8rem;
-            font-size: 0.75rem;
-            color: #9ca3af;
-            text-align: center;
-        }}
+        }
+        
+        /* Metric cards styling */
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
         </style>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 # ===================== DOMAIN MODEL =====================
@@ -235,25 +136,14 @@ def normalize_email(email: str) -> str:
 USER_DATA_FILE = "users.json"
 
 def save_users_to_file(user_store):
+    """Properly save all user data including transactions and categories"""
     serializable = {}
-
+    
     for email, user in user_store.items():
-        u_dict = asdict(user)
-
-        # Convert history upload_time to ISO strings
-        history_list = []
-        for h in u_dict.get("history", []):
-            h_copy = h.copy()
-            ut = h_copy.get("upload_time")
-            if isinstance(ut, datetime):
-                h_copy["upload_time"] = ut.isoformat()
-            history_list.append(h_copy)
-        u_dict["history"] = history_list
-
-        serializable[email] = u_dict
-
+        serializable[email] = user.to_dict()
+    
     with open(USER_DATA_FILE, "w") as f:
-        json.dump(serializable, f, indent=4)
+        json.dump(serializable, f, indent=2)
 
 
 def load_users_from_file():
@@ -265,36 +155,56 @@ def load_users_from_file():
 
     loaded = {}
 
-    for email, u in data.items():
-        # Safely get optional fields
-        accounts_raw = u.get("accounts", [])
-        history_raw = u.get("history", [])
-        goals_raw = u.get("goals", [])
+    for email, u_data in data.items():
+        # Safely reconstruct accounts, filtering out unexpected fields
+        accounts_raw = u_data.get('accounts', [])
+        accounts = []
+        for acc in accounts_raw:
+            # Only include fields that FinancialAccount expects
+            valid_fields = {
+                'account_id': acc.get('account_id'),
+                'institution_name': acc.get('institution_name'),
+                'account_type': acc.get('account_type'),
+                'current_balance': acc.get('current_balance'),
+                'last_four': acc.get('last_four')
+                # Skip 'transactions' and any other unexpected fields
+            }
+            # Remove None values
+            valid_fields = {k: v for k, v in valid_fields.items() if v is not None}
+            accounts.append(FinancialAccount(**valid_fields))
 
-        accounts = [FinancialAccount(**acc) for acc in accounts_raw]
-
+        # Rest of your load function remains the same...
         history = []
-        for h in history_raw:
-            h_copy = h.copy()
-            ut = h_copy.get("upload_time")
-            if isinstance(ut, str):
-                try:
-                    h_copy["upload_time"] = datetime.fromisoformat(ut)
-                except ValueError:
-                    # Fall back to now if parsing fails
-                    h_copy["upload_time"] = datetime.now()
-            history.append(StatementHistoryItem(**h_copy))
+        for h_data in u_data.get('history', []):
+            transactions = [
+                Transaction(
+                    transaction_id=t['transaction_id'],
+                    date=t['date'],
+                    description=t['description'],
+                    amount=t['amount'],
+                    category=t['category']
+                ) for t in h_data.get('transactions', [])
+            ]
+            
+            history.append(StatementHistoryItem(
+                statement_id=h_data['statement_id'],
+                upload_time=datetime.fromisoformat(h_data['upload_time']),
+                total_income=h_data['total_income'],
+                total_spent=h_data['total_spent'],
+                transactions=transactions,
+                category_breakdown=h_data.get('category_breakdown', {})
+            ))
 
-        goals = [Goal(**g) for g in goals_raw]
+        goals = [Goal(**g) for g in u_data.get('goals', [])]
 
         loaded[email] = User(
-            user_id=u["user_id"],
-            name=u["name"],
-            email=u["email"],
-            password=u["password"],
+            user_id=u_data['user_id'],
+            name=u_data['name'],
+            email=u_data['email'],
+            password=u_data['password'],
             accounts=accounts,
             history=history,
-            goals=goals,
+            goals=goals
         )
 
     return loaded
@@ -592,24 +502,20 @@ class SpendingAnalyzer:
         for t in transactions:
             desc = (t.description or "").upper()
             amt = t.amount
-
-            # Payment-like → always income
-            is_payment_like = any(
-                key in desc for key in ["PAYMENT", "REFUND", "CREDIT", "RETURN"]
-            )
+            is_payment_like = any(key in desc for key in ["PAYMENT", "REFUND", "CREDIT", "RETURN"])
 
             if is_payment_like:
-                total_income += abs(amt)
-                continue
-
-            # Negative amounts = income (e.g., parser fallback)
-            if amt < 0:
-                total_income += abs(amt)
-                continue
-
-            # Positive amounts = spending
-            total_spent += amt
-            by_cat[t.category] = by_cat.get(t.category, 0.0) + amt
+                if amt > 0:
+                    total_income += amt
+                else:
+                    total_spent += abs(amt)
+                    by_cat[t.category] = by_cat.get(t.category, 0.0) + abs(amt)
+            else:
+                if amt > 0:
+                    total_spent += amt
+                    by_cat[t.category] = by_cat.get(t.category, 0.0) + amt
+                else:
+                    total_income += abs(amt)
 
         return {
             "total_income": total_income,
@@ -877,6 +783,32 @@ def render_login_page():
                         st.error(f"Debug: {st.session_state.debug_info}")
 
 def extract_text_from_pdf(uploaded_file):
+    """
+    Extract text from a PDF file using pdfplumber.
+    """
+    try:
+        with pdfplumber.open(uploaded_file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        return text
+    except Exception as e:
+        return f"Error extracting text: {str(e)}"
+    """
+    Extract text from a PDF file using pdfplumber.
+    """
+    try:
+        with pdfplumber.open(uploaded_file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        return text
+    except Exception as e:
+        return f"Error extracting text: {str(e)}"
     try:
         with pdfplumber.open(uploaded_file) as pdf:
             text = ""
@@ -898,186 +830,309 @@ def parse_spending(text: str):
         spending.append((category.strip(), float(amount)))
     return spending
 
-def get_ai_feedback_gemini(spending_list):
-    """Call Gemini and return friendly budgeting advice."""
+def get_enhanced_ai_feedback(user: User):
+    """Generate comprehensive AI feedback based on full user history"""
     api_key = get_gemini_api_key()
     if not api_key:
-        return "AI feedback is currently unavailable because the Gemini API key is not configured."
+        return "AI feedback is currently unavailable due to configuration issues."
 
-    # Configure client
     genai.configure(api_key=api_key)
-
-    # Format spending into text for the prompt
-    formatted = "\n".join([f"{cat}: ${amt}" for cat, amt in spending_list])
-
+    
+    if not user.history:
+        return "Upload some statements to get personalized financial advice!"
+    
+    # Prepare comprehensive financial history
+    history_sorted = sorted(user.history, key=lambda h: h.upload_time)
+    
+    # Build detailed spending analysis
+    financial_data = []
+    total_income_all_time = 0
+    total_spent_all_time = 0
+    
+    for i, statement in enumerate(history_sorted, 1):
+        financial_data.append({
+            "period": f"Statement {i} ({statement.upload_time.strftime('%Y-%m-%d')})",
+            "income": statement.total_income,
+            "spending": statement.total_spent,
+            "savings": statement.total_income - statement.total_spent,
+            "categories": statement.category_breakdown
+        })
+        total_income_all_time += statement.total_income
+        total_spent_all_time += statement.total_spent
+    
+    # Calculate trends
+    savings_rate = ((total_income_all_time - total_spent_all_time) / total_income_all_time * 100) if total_income_all_time > 0 else 0
+    
+    # Build comprehensive prompt
     prompt = f"""
-    The user has the following spending amounts:
+    As a financial advisor, analyze this user's spending history and provide detailed, actionable advice:
 
-    {formatted}
+    FINANCIAL HISTORY:
+    {json.dumps(financial_data, indent=2)}
 
-    Provide clear and simple budgeting feedback.
-    Identify overspending, patterns, and ways they can save money.
-    Keep the tone friendly and helpful.
+    OVERALL SUMMARY:
+    - Total Income: ${total_income_all_time:,.2f}
+    - Total Spending: ${total_spent_all_time:,.2f}
+    - Net Savings: ${total_income_all_time - total_spent_all_time:,.2f}
+    - Overall Savings Rate: {savings_rate:.1f}%
+
+    Please provide a comprehensive analysis with:
+    1. **Spending Patterns**: Identify trends, seasonal variations, and concerning patterns
+    2. **Category Analysis**: Which categories are they overspending in? Where can they cut back?
+    3. **Savings Opportunities**: Specific, actionable ways to save money based on their spending
+    4. **Goal Progress**: If they have savings goals, how are they tracking?
+    5. **Financial Health Score**: Rate their financial health from 1-10 with justification
+    6. **Next Steps**: 3-5 specific actions they should take in the next 30 days
+
+    Make the advice personalized, empathetic, and practical. Use emojis to make it engaging.
     """
+    
+    try:
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"I'm having trouble analyzing your data right now. Please try again later. Error: {str(e)}"
 
-    # Try a couple of model ids that work with different library versions
-    possible_models = [
-        "models/gemini-1.5-flash",
-        "models/gemini-1.5-pro",
-        "models/gemini-pro",
-    ]
-
-    last_error = None
-
-    for model_name in possible_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            last_error = e
-            continue
-
-    # If all models fail, fall back to a simple hard coded message
-    st.warning(f"AI feedback is temporarily unavailable ({last_error}). Showing basic guidance instead.")
-
-    # Very simple fallback advice
-    total = sum(amt for _, amt in spending_list)
-    top_cat = None
-    if spending_list:
-        top_cat = max(spending_list, key=lambda x: x[1])[0]
-
-    lines = []
-    lines.append(f"In this period your total tracked spending is about ${total:,.2f}.")
-    if top_cat:
-        lines.append(f"Your highest spending category appears to be {top_cat}.")
-        lines.append(f"Consider setting a monthly limit for {top_cat} and moving anything above that into savings.")
-    else:
-        lines.append("Consider setting a simple monthly budget and tracking a few key categories like food, transport, and fun.")
-
-    return " ".join(lines)
-
-def render_dashboard_page():
+# Update the AI Feedback tab:
+def render_enhanced_ai_feedback():
     require_auth()
     user = get_current_user()
-    st.title("Dashboard")
-    st.caption("Quick overview of your spending and goals in Piggy.")
+    
+    st.header("🧠 AI Financial Advisor")
+    st.write("Get personalized financial advice based on your complete spending history.")
 
-    if user:
-        st.write(f"Welcome back, **{user.name}**.")
-    else:
-        st.write("Welcome.")
-
-    # If there is no current analysis in the session,
-    # try to restore it from the latest statement in user history.
-    if st.session_state.analysis is None and user and user.history:
-        # Take the most recent statement by upload_time
-        latest_item = sorted(user.history, key=lambda h: h.upload_time)[-1]
-
-        st.session_state.analysis = {
-            "total_income": latest_item.total_income,
-            "total_spent": latest_item.total_spent,
-            # We did not store category breakdown in history yet,
-            # so keep this empty for now.
-            "by_category": {},
-        }
-
-    analysis = st.session_state.analysis
-
-    # If we still have no analysis and no transactions, there is nothing to show
-    if analysis is None and not st.session_state.transactions:
-        st.info("No statement data found yet. Go to the Reports tab to upload your first statement.")
+    if not user or not user.history:
+        st.info("📊 Upload your first statement in the Reports tab to get personalized financial advice!")
         return
 
-    # KPI cards using whatever analysis we have
-    if analysis:
-        total_spent = analysis.get("total_spent", 0.0)
-        total_income = analysis.get("total_income", 0.0)
-        by_category = analysis.get("by_category", {}) or {}
+    # Show user's financial snapshot
+    st.subheader("Your Financial Snapshot")
+    
+    total_statements = len(user.history)
+    total_income = sum(h.total_income for h in user.history)
+    total_spent = sum(h.total_spent for h in user.history)
+    net_savings = total_income - total_spent
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Statements Analyzed", total_statements)
+    with col2:
+        st.metric("Total Income", f"${total_income:,.2f}")
+    with col3:
+        st.metric("Total Spending", f"${total_spent:,.2f}")
+    with col4:
+        st.metric("Net Position", f"${net_savings:,.2f}")
 
-        savings_pct = None
-        if total_income > 0:
-            savings_pct = (total_income - total_spent) / total_income * 100
+    # FIXED: Truly unique key with timestamp
+    import time
+    unique_key = f"ai_feedback_{int(time.time() * 1000)}"
+    
+    if st.button("🎯 Get Personalized Financial Advice", type="primary", key=unique_key):
+        with st.spinner("🤔 Analyzing your financial patterns... This may take a moment."):
+            advice = get_enhanced_ai_feedback(user)
+            
+        st.subheader("💡 Your Personalized Financial Plan")
+        
+        with st.container():
+            st.markdown("---")
+            st.markdown(advice)
+            st.markdown("---")
+            
+        st.caption("💡 Remember: This is AI-generated advice. Always consult with a qualified financial advisor for major decisions.")
 
-        # Top category, only if we actually have category data for this session
-        top_cat_label = "Not available"
-        top_cat_detail = "Upload a new statement to see category breakdown."
-        if by_category and total_spent > 0:
-            sorted_cats = sorted(by_category.items(), key=lambda kv: kv[1], reverse=True)
-            top_name, top_val = sorted_cats[0]
-            share = top_val / total_spent * 100
-            top_cat_label = top_name
-            top_cat_detail = f"${top_val:,.2f} ({share:.1f}% of spending)"
-
-        kpi_html = f"""
-        <div class="piggy-kpi-row">
-            <div class="piggy-kpi-card">
-                <div class="piggy-kpi-label">Total spent (latest statement)</div>
-                <div class="piggy-kpi-value">${total_spent:,.2f}</div>
-                <div class="piggy-kpi-sub">Includes all card purchases and debits.</div>
-            </div>
-            <div class="piggy-kpi-card">
-                <div class="piggy-kpi-label">Total income detected</div>
-                <div class="piggy-kpi-value">${total_income:,.2f}</div>
-                <div class="piggy-kpi-sub">Credits such as payroll and refunds.</div>
-            </div>
-            <div class="piggy-kpi-card">
-                <div class="piggy-kpi-label">Estimated savings rate</div>
-                <div class="piggy-kpi-value">
-                    {f"{savings_pct:.1f}%" if savings_pct is not None else "N/A"}
-                </div>
-                <div class="piggy-kpi-sub">Roughly (income - spending) ÷ income for this period.</div>
-            </div>
-            <div class="piggy-kpi-card">
-                <div class="piggy-kpi-label">Top spending category</div>
-                <div class="piggy-kpi-value">{top_cat_label}</div>
-                <div class="piggy-kpi-sub">{top_cat_detail}</div>
-            </div>
-        </div>
-        """
-        st.markdown(kpi_html, unsafe_allow_html=True)
-
-    # Recent transactions table, only if we actually have them in this session
-    tx_list: List[Transaction] = st.session_state.transactions
-    if tx_list:
-        st.subheader("Recent transactions")
-        df = pd.DataFrame(
-            [{
-                "Date": t.date,
-                "Description": t.description,
-                "Amount": t.amount,
-                "Category": t.category,
-            } for t in tx_list]
-        )
-        st.dataframe(df.tail(10), use_container_width=True)
-    else:
-        st.subheader("Recent transactions")
-        st.info("Upload a new statement on the Reports tab to see a detailed transaction list. "
-                "The summary above is based on your last saved statement.")
-
-    # Category chart, only if we have per category data (same session only for now)
-    if analysis and analysis.get("by_category"):
-        cat_df = pd.DataFrame(
-            [{"Category": k, "Spend": v} for k, v in analysis["by_category"].items()]
-        ).sort_values("Spend", ascending=False)
-        st.subheader("Spending by category")
-        st.bar_chart(cat_df.set_index("Category"))
-    else:
-        st.subheader("Spending by category")
-        st.info("Category breakdown will appear after you upload a new statement.")
-
-
-
-def render_reports_page():
+def render_enhanced_dashboard():
     require_auth()
-    st.title("Spending report and Piggy AI")
+    user = get_current_user()
+    
+    st.title("📊 Financial Dashboard")
+    st.caption("Complete overview of your financial health")
 
-    st.write("Upload a credit card or bank statement in PDF or CSV format.")
+    if user:
+        st.write(f"Welcome back, **{user.name}**! Here's your financial snapshot.")
+    else:
+        st.error("User not found")
+        return
 
-    uploaded_file = st.file_uploader("Upload statement (PDF or CSV)", type=["pdf", "csv"])
+    # Get the latest statement data
+    latest_analysis = None
+    latest_transactions = []
+    
+    if user.history:
+        latest_item = sorted(user.history, key=lambda h: h.upload_time)[-1]
+        latest_analysis = {
+            "total_income": latest_item.total_income,
+            "total_spent": latest_item.total_spent,
+            "by_category": latest_item.category_breakdown
+        }
+        latest_transactions = latest_item.transactions
 
+    # If no history but we have session data, use that
+    if not latest_analysis and st.session_state.analysis:
+        latest_analysis = st.session_state.analysis
+        latest_transactions = st.session_state.transactions
+
+    if not latest_analysis:
+        st.info("💡 No financial data found yet. Visit the Reports tab to upload your first statement!")
+        return
+
+    # ========== KPI METRICS ==========
+    st.subheader("📈 Key Metrics")
+    
+    total_spent = latest_analysis.get("total_spent", 0)
+    total_income = latest_analysis.get("total_income", 0)
+    by_category = latest_analysis.get("by_category", {})
+    
+    # Calculate derived metrics
+    net_flow = total_income - total_spent
+    savings_rate = (net_flow / total_income * 100) if total_income > 0 else 0
+    
+    # Create KPI columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Income",
+            value=f"${total_income:,.2f}",
+            delta=None
+        )
+    
+    with col2:
+        st.metric(
+            label="Total Spending",
+            value=f"${total_spent:,.2f}",
+            delta=None
+        )
+    
+    with col3:
+        delta_color = "normal" if net_flow >= 0 else "inverse"
+        st.metric(
+            label="Net Cash Flow",
+            value=f"${net_flow:,.2f}",
+            delta_color=delta_color
+        )
+    
+    with col4:
+        status = "Good" if savings_rate >= 20 else "Needs Attention"
+        st.metric(
+            label="Savings Rate",
+            value=f"{savings_rate:.1f}%",
+            delta=status
+        )
+
+    # ========== SPENDING VISUALIZATIONS ==========
+    if by_category:
+        st.subheader("💰 Spending Breakdown")
+        
+        # Create two columns for charts
+        chart_col1, chart_col2 = st.columns(2)
+        
+        with chart_col1:
+            # Pie chart
+            if sum(by_category.values()) > 0:
+                fig_pie = px.pie(
+                    values=list(by_category.values()),
+                    names=list(by_category.keys()),
+                    title="Spending by Category",
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_pie, use_container_width=True)
+        
+        with chart_col2:
+            # Bar chart
+            categories = list(by_category.keys())
+            amounts = list(by_category.values())
+            
+            fig_bar = px.bar(
+                x=categories,
+                y=amounts,
+                title="Spending by Category",
+                labels={'x': 'Category', 'y': 'Amount ($)'},
+                color=amounts,
+                color_continuous_scale='Blues'
+            )
+            fig_bar.update_layout(showlegend=False)
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ========== RECENT TRANSACTIONS ==========
+    st.subheader("💳 Recent Transactions")
+    
+    if latest_transactions:
+        # Create a styled dataframe
+        df = pd.DataFrame([
+            {
+                "Date": t.date or "N/A",
+                "Description": t.description,
+                "Amount": f"${t.amount:,.2f}",
+                "Category": t.category,
+                "Type": "Income" if t.amount < 0 else "Expense"
+            }
+            for t in latest_transactions[-10:]  # Last 10 transactions
+        ])
+        
+        # Style the dataframe
+        st.dataframe(
+            df,
+            use_container_width=True,
+            column_config={
+                "Amount": st.column_config.TextColumn(
+                    "Amount",
+                    help="Transaction amount"
+                ),
+                "Type": st.column_config.TextColumn(
+                    "Type",
+                    help="Income or Expense"
+                )
+            }
+        )
+    else:
+        st.info("No transaction data available.")
+
+    # ========== SPENDING TRENDS OVER TIME ==========
+    if len(user.history) > 1:
+        st.subheader("📅 Spending Trends")
+        
+        # Prepare trend data
+        history_sorted = sorted(user.history, key=lambda h: h.upload_time)
+        dates = [h.upload_time.strftime('%Y-%m-%d') for h in history_sorted]
+        spending = [h.total_spent for h in history_sorted]
+        income = [h.total_income for h in history_sorted]
+        
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(
+            x=dates, y=spending, 
+            mode='lines+markers', 
+            name='Spending',
+            line=dict(color='#ff6b6b', width=3)
+        ))
+        fig_trend.add_trace(go.Scatter(
+            x=dates, y=income, 
+            mode='lines+markers', 
+            name='Income',
+            line=dict(color='#51cf66', width=3)
+        ))
+        
+        fig_trend.update_layout(
+            title="Income vs Spending Over Time",
+            xaxis_title="Date",
+            yaxis_title="Amount ($)",
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+def render_enhanced_reports_page():
+    require_auth()
+    st.title("📋 Detailed Reports & Analysis")
+    
+    st.write("Upload your bank or credit card statements for detailed analysis and insights.")
+    
+    uploaded_file = st.file_uploader("Choose a statement file", type=["pdf", "csv"], 
+                                   help="Supported formats: PDF statements or CSV exports")
+    
     if uploaded_file is not None:
-        with st.spinner("Reading and analyzing your statement..."):
+        with st.spinner("🔍 Analyzing your statement... This may take a moment."):
             try:
                 if uploaded_file.name.lower().endswith(".pdf"):
                     text = PDFStatementParser.extract_text(uploaded_file)
@@ -1085,71 +1140,106 @@ def render_reports_page():
                 else:
                     transactions = CSVStatementParser.parse_transactions(uploaded_file)
             except Exception as e:
-                st.error(f"Could not read this file: {e}")
+                st.error(f"❌ Error reading file: {str(e)}")
                 return
 
             if not transactions:
-                st.error("No transactions detected.")
+                st.error("No transactions could be extracted from this file.")
                 return
 
-            # Save transactions for this session
+            # Store in session
             st.session_state.transactions = transactions
-
-            # Analyze
+            
+            # Analyze spending
             analysis = SpendingAnalyzer.analyze(transactions)
             st.session_state.analysis = analysis
-
-            # Save history permanently
+            
+            # Save to user history with FULL data
             user = get_current_user()
-            if user is not None:
-                item = StatementHistoryItem(
-                    statement_id=f"stmt{len(user.history) + 1}",
+            if user:
+                # Generate unique statement ID
+                statement_id = f"stmt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                
+                new_statement = StatementHistoryItem(
+                    statement_id=statement_id,
                     upload_time=datetime.now(),
-                    total_income=analysis.get("total_income", 0.0),
-                    total_spent=analysis.get("total_spent", 0.0),
+                    total_income=analysis.get("total_income", 0),
+                    total_spent=analysis.get("total_spent", 0),
+                    transactions=transactions,  # Store all transactions
+                    category_breakdown=analysis.get("by_category", {})  # Store categories
                 )
-                user.history.append(item)
-
-                # Persist to disk so it is remembered across reloads
+                
+                user.history.append(new_statement)
+                
+                # Persist to disk
                 user_store = get_user_store()
                 save_users_to_file(user_store)
+                
+                st.success(f"✅ Statement analyzed and saved successfully! ({len(transactions)} transactions found)")
 
-            # Recommendation
+            # Generate recommendation
             rec = RecommendationEngine.generate(analysis)
             st.session_state.recommendation = rec
 
-        # Show detected transactions
-        df = pd.DataFrame(
-            [{
-                "Date": t.date,
-                "Description": t.description,
-                "Amount": t.amount,
-                "Category": t.category,
-            } for t in st.session_state.transactions]
-        )
-
-        st.subheader("Detected transactions")
-        st.dataframe(df.head(30))
-
-        # Category table
-        if analysis and analysis["by_category"]:
-            st.subheader("Category breakdown")
-            total_spent = analysis["total_spent"]
-            rows = []
-            for cat, val in analysis["by_category"].items():
-                share = (val / total_spent * 100) if total_spent > 0 else 0.0
-                rows.append(
-                    {"Category": cat, "Amount": val, "Share (%)": round(share, 1)}
-                )
-            cat_df = pd.DataFrame(rows).sort_values("Amount", ascending=False)
-            st.dataframe(cat_df)
-
-    # Show recommendation
-    rec = st.session_state.recommendation
-    if rec:
-        st.subheader(rec.title)
-        st.text(rec.description)
-        st.caption(f"Generated at {rec.generation_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        # ========== DETAILED ANALYSIS SECTION ==========
+        st.subheader("📊 Detailed Analysis")
+        
+        # Transaction table with filters
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            min_amount = st.number_input("Minimum amount", value=0.0, step=10.0)
+        with col2:
+            category_filter = st.selectbox("Category", ["All"] + list(set(t.category for t in transactions)))
+        
+        # Filter transactions
+        filtered_tx = transactions
+        if min_amount > 0:
+            filtered_tx = [t for t in filtered_tx if abs(t.amount) >= min_amount]
+        if category_filter != "All":
+            filtered_tx = [t for t in filtered_tx if t.category == category_filter]
+        
+        # Display filtered transactions
+        if filtered_tx:
+            df = pd.DataFrame([
+                {
+                    "Date": t.date or "Unknown",
+                    "Description": t.description,
+                    "Amount": t.amount,
+                    "Category": t.category,
+                    "Type": "Credit" if t.amount < 0 else "Debit"
+                }
+                for t in filtered_tx
+            ])
+            
+            st.dataframe(df, use_container_width=True)
+            
+            # Summary stats
+            st.subheader("📈 Summary Statistics")
+            cols = st.columns(3)
+            
+            with cols[0]:
+                avg_spend = df[df['Amount'] > 0]['Amount'].mean() if len(df[df['Amount'] > 0]) > 0 else 0
+                st.metric("Average Transaction", f"${avg_spend:.2f}")
+            
+            with cols[1]:
+                largest_tx = df.loc[df['Amount'].idxmax()] if len(df) > 0 else None
+                if largest_tx is not None:
+                    st.metric("Largest Transaction", f"${largest_tx['Amount']:.2f}", largest_tx['Category'])
+            
+            with cols[2]:
+                category_count = df['Category'].nunique()
+                st.metric("Categories Used", category_count)
+        
+        # Enhanced recommendation display
+        if st.session_state.recommendation:
+            st.subheader("💡 Personalized Recommendations")
+            
+            rec = st.session_state.recommendation
+            with st.container():
+                st.success(rec.title)
+                st.write(rec.description)
+                st.caption(f"Generated on {rec.generation_date.strftime('%B %d, %Y at %H:%M')}")
 
 
 def render_history_page():
@@ -1161,59 +1251,38 @@ def render_history_page():
         st.info("No previous statements found.")
         return
 
-    # Show newest first
+    # Show most recent first
     history_sorted = sorted(user.history, key=lambda item: item.upload_time, reverse=True)
-
-    # Show success message (once)
-    if "deleted_statement" in st.session_state:
-        st.success(f"Deleted {st.session_state.deleted_statement}.")
-        del st.session_state.deleted_statement
 
     for item in history_sorted:
         with st.container():
             cols = st.columns([3, 2, 2, 1])
 
-            # Left section: ID and timestamp
             with cols[0]:
                 st.markdown(
-                    f"**{item.statement_id}**<br>"
-                    f"{item.upload_time.strftime('%Y-%m-%d %H:%M:%S')}",
-                    unsafe_allow_html=True
+                    f"**{item.statement_id}**  \n"
+                    f"{item.upload_time.strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-
-            # Spent
             with cols[1]:
                 st.markdown(f"**Total spent:** ${item.total_spent:,.2f}")
-
-            # Income
             with cols[2]:
                 st.markdown(f"**Total income:** ${item.total_income:,.2f}")
 
-            # Delete button (MUST be unique)
+            # Delete button for this statement
             with cols[3]:
-                unique_key = f"delete_{item.statement_id}_{item.upload_time.timestamp()}"
-
-                if st.button("Delete", key=unique_key):
-                    # Delete it
+                if st.button("Delete", key=f"delete_{item.statement_id}"):
+                    # Remove from the user's history
                     user.history = [
                         h for h in user.history if h.statement_id != item.statement_id
                     ]
 
-                    # Save change
+                    # Persist the change
                     save_users_to_file(get_user_store())
 
-                    # Persist message
-                    st.session_state.deleted_statement = item.statement_id
-
+                    st.success(f"Deleted {item.statement_id}.")
                     st.rerun()
 
         st.markdown("---")
-
-
-    # Show success message ONCE per deletion
-    if "deleted_statement" in st.session_state:
-        st.success(f"Deleted {st.session_state.deleted_statement}.")
-        del st.session_state.deleted_statement
 
 def render_goals_page():
     require_auth()
@@ -1371,6 +1440,7 @@ def render_settings_page():
         user.name = new_name or user.name
         st.success("Profile updated for this session.")
 
+
 def render_placeholder_page(title: str, text: str):
     require_auth()
     st.title(title)
@@ -1401,7 +1471,6 @@ def render_piggy_header(user_name: Optional[str]):
 # ===================== MAIN =====================
 
 init_session_state()
-inject_global_styles()
 
 if not st.session_state.authenticated:
     # Just show login / signup when logged out
@@ -1426,10 +1495,10 @@ else:
     )
 
     with tab_dashboard:
-        render_dashboard_page()
+        render_enhanced_dashboard()
 
     with tab_reports:
-        render_reports_page()
+        render_enhanced_reports_page()
 
     with tab_history:
         render_history_page()
@@ -1441,38 +1510,32 @@ else:
         render_settings_page()
 
     with tab_ai:
-        require_auth()
-        user = get_current_user()
-        st.header("AI Spending Feedback")
+        render_enhanced_ai_feedback()
+    render_enhanced_ai_feedback()  # changed from whatever was there before
+    user = get_current_user()
+    st.header("ai spending feedback")
+    if not user or not user.history:
+        st.info("upload at least one statement on the reports tab so i can analyze your spending history.")
+    else:
+            # sort statements oldest to newest so the ai sees the trend in order
+        history_sorted = sorted(user.history, key=lambda h: h.upload_time)
 
-        if not user or not user.history:
-            st.info("Upload at least one statement on the Reports tab so I can analyze your spending history.")
-        else:
-            # Sort statements oldest to newest so the AI sees the trend in order
-            history_sorted = sorted(user.history, key=lambda h: h.upload_time)
+        # build a spending list that covers all statements
+        spending_list = []
+        for idx, item in enumerate(history_sorted, start=1):
+            label = f"statement {idx} ({item.upload_time.strftime('%y-%m-%d')})"
+            spending_list.append((label, item.total_spent))
 
-            # Build a spending list that covers all statements
-            spending_list = []
-            for idx, item in enumerate(history_sorted, start=1):
-                label = f"Statement {idx} ({item.upload_time.strftime('%Y-%m-%d')})"
-                spending_list.append((label, item.total_spent))
-
-            st.subheader("Statements included in AI analysis")
+            st.subheader("statements included in ai analysis")
             df = pd.DataFrame(
                 [{
-                    "Statement": label,
-                    "Total spent": amount,
-                    "Total income": history_sorted[i].total_income,
+                    "statement": label,
+                    "total spent": amount,
+                    "total income": history_sorted[i].total_income,
                 } for i, (label, amount) in enumerate(spending_list)]
             )
             st.dataframe(df, use_container_width=True)
-
-            if st.button("Generate AI feedback"):
-                with st.spinner("Analyzing your spending history..."):
-                    advice = get_ai_feedback_gemini(spending_list)
-                st.subheader("AI suggestions")
-                st.write(advice)
-
+        
     # Footer
     st.markdown(
         "<div class='piggy-footer'>© 2025 Piggy · Demo app for CP317</div>",
