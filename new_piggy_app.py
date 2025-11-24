@@ -2,16 +2,14 @@ import streamlit as st  # type: ignore
 import pandas as pd  # type: ignore
 import re
 from io import BytesIO
-from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import copy
-import time
+import base64
 
 # Visualization imports
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from PyPDF2 import PdfReader  # type: ignore
 
@@ -68,33 +66,60 @@ def inject_global_styles():
             border-right: 1px solid #e5e7eb;
         }}
 
+        [data-testid="stSidebar"] > div:first-child {{
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }}
+
         /* Sidebar header branding */
         .piggy-sidebar-header {{
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 10px;
-            padding: 12px 4px 20px 4px;
+            justify-content: center;
+            gap: 15px;
+            padding: 8px 0 20px 0;
             border-bottom: 1px solid #f1f3f5;
             margin-bottom: 12px;
+            margin-left: -1rem;
+            margin-right: -1rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
         }}
 
         .piggy-logo-img {{
-            width: 40px;
-            height: 40px;
+            width: 120px;
+            height: 120px;
+            display: block;
+            margin: 0 auto;
+        }}
+
+        .piggy-branding {{
+            text-align: center;
+            width: 100%;
         }}
 
         .piggy-title {{
-            font-size: 22px;
+            font-size: 26px;
             font-weight: 700;
             color: {NAVY};
+            text-align: center;
+            margin: 0;
+            line-height: 1.2;
         }}
 
         .piggy-tagline {{
-            font-size: 12px;
+            font-size: 13px;
             color: {TEXT_MUTED};
+            text-align: center;
+            margin-top: 4px;
         }}
 
         /* Sidebar navigation radio styled as buttons */
+        [data-testid="stSidebar"] [role="radiogroup"] {{
+            padding: 0;
+        }}
+
         [data-testid="stSidebar"] [role="radiogroup"] > label {{
             display: block;
             width: 100%;
@@ -107,16 +132,6 @@ def inject_global_styles():
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
-        }}
-
-        [data-testid="stSidebar"] [role="radiogroup"] > label:hover {{
-            background-color: {PINK_HOVER};
-        }}
-
-        [data-testid="stSidebar"] [role="radiogroup"] > label[aria-checked="true"] {{
-            background-color: {PINK_ACTIVE};
-            border-color: #e98ab1;
-            box-shadow: 0 0 0 1px rgba(233, 138, 177, 0.35);
         }}
 
         /* Sidebar section titles */
@@ -804,18 +819,43 @@ def compute_total_savings_from_history(user: User) -> float:
     return total
 
 # ===================== UI PAGES =====================
-
+def get_base64_logo():
+    """Load and encode the logo image as base64."""
+    try:
+        with open("logo/piggy_logo.png", "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except FileNotFoundError:
+        # Return a fallback emoji or empty string if logo not found
+        return ""
 
 def render_login_page():
-    st.title("Piggy")
-    st.subheader("Personal spending insights")
-
-    # Debug toggle
-    if st.checkbox("Show debug information"):
-        st.session_state.show_debug = True
+    # Add logo at the top
+    logo_b64 = get_base64_logo()
+    
+    if logo_b64:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin-top: 2rem; margin-bottom: 1rem;">
+                <img src="data:image/png;base64,{logo_b64}" style="width: 120px; height: 120px; margin-bottom: 0.5rem;" alt="Piggy logo" />
+                <h1 style="margin: 0; padding: 0 0 0 10px; color: {NAVY};">Piggy</h1>
+                <p style="margin: 0.5rem 0 0 0; color: {TEXT_MUTED}; font-size: 16px;">Personal spending insights</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.session_state.show_debug = False
-
+        # Fallback emoji
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin-top: 2rem; margin-bottom: 1rem;">
+                <div style="font-size: 80px; line-height: 1; margin-bottom: 0.5rem;">🐷</div>
+                <h1 style="margin: 0; padding: 0 0 0 10px; color: {NAVY};">Piggy</h1>
+                <p style="margin: 0.5rem 0 0 0; color: {TEXT_MUTED}; font-size: 16px;">Personal spending insights</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     if st.session_state.signup_success:
         st.success(st.session_state.signup_success)
         st.session_state.signup_success = None
@@ -1472,21 +1512,38 @@ def render_placeholder_page(title: str, text: str):
 
 def render_sidebar(user_name: Optional[str]) -> str:
     with st.sidebar:
-        st.markdown(
-            f"""
-            <div class="piggy-sidebar-header">
-                <img src="/mnt/data/12707622.png" class="piggy-logo-img" alt="Piggy logo" />
-                <div>
-                    <div class="piggy-title">Piggy</div>
-                    <div class="piggy-tagline">Personal spending insights</div>
+        logo_b64 = get_base64_logo()
+        
+        if logo_b64:
+            st.markdown(
+                f"""
+                <div class="piggy-sidebar-header">
+                    <img src="data:image/png;base64,{logo_b64}" class="piggy-logo-img" alt="Piggy logo" />
+                    <div class="piggy-branding">
+                        <div class="piggy-title">Piggy</div>
+                        <div class="piggy-tagline">Personal spending insights</div>
+                    </div>
                 </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            # Fallback if logo doesn't load
+            st.markdown(
+                f"""
+                <div class="piggy-sidebar-header">
+                    <div style="font-size:80px; line-height: 1;">🐷</div>
+                    <div class="piggy-branding">
+                        <div class="piggy-title">Piggy</div>
+                        <div class="piggy-tagline">Personal spending insights</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         if user_name:
-            st.markdown(f"<div style='font-size:12px;color:{TEXT_MUTED};margin-bottom:12px;'>Logged in as <strong>{user_name}</strong></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:12px;color:{TEXT_MUTED};margin-bottom:12px;text-align:center;'>Logged in as <strong>{user_name}</strong></div>", unsafe_allow_html=True)
 
         st.markdown('<div class="piggy-sidebar-section-title">Navigation</div>', unsafe_allow_html=True)
 
