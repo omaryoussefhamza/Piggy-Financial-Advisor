@@ -219,6 +219,14 @@ INITIAL_USER_STORE = {
 def normalize_email(email: str) -> str:
     return email.strip().lower()
 
+def sanitize_text(value: Optional[str]) -> str:
+    """Remove stray non ASCII characters like the leading Ÿ from PDF extracted text."""
+    if not value:
+        return ""
+    cleaned = re.sub(r'^[^\x20-\x7E]+', '', value)  # remove weird chars at the start
+    cleaned = cleaned.replace("", "")  # remove common PDF garbage chars
+    cleaned = cleaned.strip()
+    return cleaned
 
 USER_DATA_FILE = "users.json"
 
@@ -409,7 +417,8 @@ class PDFStatementParser:
             amount = float(amount_str)
 
             date_part = m.group(0)
-            desc = line[m.end() :].replace(amount_str, "").strip()
+            desc = line[m.end():].replace(amount_str, "").strip()
+            desc = sanitize_text(desc)
 
             # store payments as negative spend
             results.append((date_part, desc, -amount))
@@ -455,9 +464,9 @@ class PDFStatementParser:
             m = datepair_re.match(line)
             if m:
                 date_part = m.group(0)
-                desc = line[m.end() :].strip()
+                desc = line[m.end():].strip()
+                desc = sanitize_text(desc)
 
-                # find the next line that has an amount on it
                 j = i + 1
                 while j < len(lines) and not amount_re.search(lines[j]):
                     j += 1
@@ -472,6 +481,7 @@ class PDFStatementParser:
                 results.append((date_part, desc, amount))
                 i = j + 1
             else:
+                # This is the important part so we do not get stuck
                 i += 1
 
         return results
@@ -545,7 +555,7 @@ class CSVStatementParser:
 
         for _, row in df.iterrows():
             date_str = str(row.get(date_col, "")).strip()
-            desc = str(row.get(desc_col, "")).strip()
+            desc = sanitize_text(str(row.get(desc_col, "")))
             amt_raw = row.get(amt_col, 0)
 
             try:
@@ -1107,7 +1117,7 @@ def render_enhanced_dashboard():
             [
                 {
                     "Date": t.date or "N/A",
-                    "Description": t.description,
+                    "Description": sanitize_text(t.description),
                     "Amount": f"${t.amount:,.2f}",
                     "Category": t.category,
                     "Type": "Income" if t.amount < 0 else "Expense",
@@ -1242,7 +1252,7 @@ def render_enhanced_reports_page():
                 [
                     {
                         "Date": t.date or "Unknown",
-                        "Description": t.description,
+                        "Description": sanitize_text(t.description),
                         "Amount": t.amount,
                         "Category": t.category,
                         "Type": "Credit" if t.amount < 0 else "Debit",
