@@ -1,80 +1,225 @@
-# models.py
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import hashlib
-
-@dataclass
-class Transaction:
-    transaction_id: str
-    date: Optional[str]
-    description: str
-    amount: float
-    category: str
-
-@dataclass
-class FinancialAccount:
-    account_id: str
-    institution_name: str
-    account_type: str
-    current_balance: Optional[float] = None
-    last_four: Optional[str] = None
-    transactions: List[Transaction] = field(default_factory=list) 
-@dataclass
-class StatementHistoryItem:
-    statement_id: str
-    upload_time: datetime
-    total_income: float
-    total_spent: float
-    transactions: List[Transaction] = field(default_factory=list)  # Store actual transactions
-    category_breakdown: Dict[str, float] = field(default_factory=dict)  # Store categories
-
-@dataclass
-class Goal:
-    goal_id: str
-    name: str
-    target_amount: float
-    current_amount: float = 0.0
-    target_date: Optional[str] = None
-
-@dataclass
-class Recommendation:
-    recommendation_id: str
-    title: str
-    description: str
-    generation_date: datetime
-
-@dataclass
-class User:
-    user_id: str
-    name: str
-    email: str
-    password: str
-    accounts: List[FinancialAccount] = field(default_factory=list)
-    history: List[StatementHistoryItem] = field(default_factory=list)
-    goals: List[Goal] = field(default_factory=list)
-    
-    def check_password(self, password: str) -> bool:
-        return self.password == password
-    
-    def to_dict(self):
-        return {
-            'user_id': self.user_id,
-            'name': self.name,
-            'email': self.email,
-            'password': self.password,
-            'accounts': [acc.__dict__ for acc in self.accounts],
-            'history': [
-                {
-                    'statement_id': h.statement_id,
-                    'upload_time': h.upload_time.isoformat(),
-                    'total_income': h.total_income,
-                    'total_spent': h.total_spent,
-                    'transactions': [t.__dict__ for t in h.transactions],
-                    'category_breakdown': h.category_breakdown
-                }
-                for h in self.history
-            ],
-            'goals': [g.__dict__ for g in self.goals]
+{
+  "niya@piggy.com": {
+    "user_id": "u1",
+    "name": "Niya",
+    "email": "niya@piggy.com",
+    "password": "test123",
+    "accounts": [
+      {
+        "account_id": "acc1",
+        "institution_name": "Demo Bank",
+        "account_type": "Credit Card",
+        "current_balance": 0.0,
+        "last_four": null,
+        "transactions": []
+      }
+    ],
+    "history": [],
+    "goals": []
+  },
+  "demo@piggy.com": {
+    "user_id": "u2",
+    "name": "Demo User",
+    "email": "demo@piggy.com",
+    "password": "demo123",
+    "accounts": [
+      {
+        "account_id": "acc2",
+        "institution_name": "Demo Bank",
+        "account_type": "Credit Card",
+        "current_balance": 0.0,
+        "last_four": null,
+        "transactions": []
+      }
+    ],
+    "history": [],
+    "goals": []
+  },
+  "omar@testing.ca": {
+    "user_id": "u3",
+    "name": "omar y",
+    "email": "omar@testing.ca",
+    "password": "1111",
+    "accounts": [
+      {
+        "account_id": "acc3",
+        "institution_name": "Demo Bank",
+        "account_type": "Credit Card",
+        "current_balance": 0.0,
+        "last_four": null,
+        "transactions": []
+      }
+    ],
+    "history": [
+      {
+        "statement_id": "stmt_20251124_010625",
+        "upload_time": "2025-11-24T01:06:25.545736",
+        "total_income": 224.96000000000004,
+        "total_spent": 74.96,
+        "transactions": [
+          {
+            "transaction_id": "tx1",
+            "date": "Oct 01 Oct 04",
+            "description": "PAYMENT RECEIVED",
+            "amount": 150.0,
+            "category": "Payment or credit"
+          },
+          {
+            "transaction_id": "tx2",
+            "date": "Oct 03 Oct 06",
+            "description": "STARBUCKS",
+            "amount": -13.77,
+            "category": "Food"
+          },
+          {
+            "transaction_id": "tx3",
+            "date": "Oct 05 Oct 07",
+            "description": "WALMART",
+            "amount": -45.2,
+            "category": "Groceries"
+          },
+          {
+            "transaction_id": "tx4",
+            "date": "Oct 07 Oct 09",
+            "description": "NETFLIX SUBSCRIPTION",
+            "amount": -15.99,
+            "category": "Entertainment"
+          },
+          {
+            "transaction_id": "tx5",
+            "date": "Oct 03 Oct 06",
+            "description": "STARBUCKS 13.77",
+            "amount": 13.77,
+            "category": "Food"
+          },
+          {
+            "transaction_id": "tx6",
+            "date": "Oct 05 Oct 07",
+            "description": "WALMART 45.20",
+            "amount": 45.2,
+            "category": "Groceries"
+          },
+          {
+            "transaction_id": "tx7",
+            "date": "Oct 07 Oct 09",
+            "description": "NETFLIX SUBSCRIPTION 15.99",
+            "amount": 15.99,
+            "category": "Entertainment"
+          }
+        ],
+        "category_breakdown": {
+          "Food": 13.77,
+          "Groceries": 45.2,
+          "Entertainment": 15.99
         }
+      },
+      {
+        "statement_id": "stmt_20251124_012032",
+        "upload_time": "2025-11-24T01:20:32.595657",
+        "total_income": 0.0,
+        "total_spent": 318.47,
+        "transactions": [
+          {
+            "transaction_id": "tx1",
+            "date": "Oct 02 Oct 05",
+            "description": "PAYMENT RECEIVED",
+            "amount": -200.0,
+            "category": "Payment or credit"
+          },
+          {
+            "transaction_id": "tx2",
+            "date": "Oct 04 Oct 06",
+            "description": "MCDONALDS                             12.49",
+            "amount": 12.49,
+            "category": "Other"
+          },
+          {
+            "transaction_id": "tx3",
+            "date": "Oct 05 Oct 08",
+            "description": "AMAZON MARKETPLACE                    89.99",
+            "amount": 89.99,
+            "category": "Other"
+          },
+          {
+            "transaction_id": "tx4",
+            "date": "Oct 06 Oct 08",
+            "description": "NETFLIX SUBSCRIPTION                  15.99",
+            "amount": 15.99,
+            "category": "Entertainment"
+          }
+        ],
+        "category_breakdown": {
+          "Payment or credit": 200.0,
+          "Other": 102.47999999999999,
+          "Entertainment": 15.99
+        }
+      },
+      {
+        "statement_id": "stmt_20251124_012036",
+        "upload_time": "2025-11-24T01:20:36.340021",
+        "total_income": 0.0,
+        "total_spent": 515.74,
+        "transactions": [
+          {
+            "transaction_id": "tx1",
+            "date": "Oct 01 Oct 04",
+            "description": "PAYMENT RECEIVED",
+            "amount": -300.0,
+            "category": "Payment or credit"
+          },
+          {
+            "transaction_id": "tx2",
+            "date": "Oct 03 Oct 05",
+            "description": "WALMART SUPERCENTER           52.30",
+            "amount": 52.3,
+            "category": "Groceries"
+          },
+          {
+            "transaction_id": "tx3",
+            "date": "Oct 04 Oct 06",
+            "description": "STARBUCKS                     8.15",
+            "amount": 8.15,
+            "category": "Food"
+          },
+          {
+            "transaction_id": "tx4",
+            "date": "Oct 06 Oct 06",
+            "description": "UBER TRIP                     18.90",
+            "amount": 18.9,
+            "category": "Transport"
+          },
+          {
+            "transaction_id": "tx5",
+            "date": "Oct 06 Oct 07",
+            "description": "NETFLIX SUBSCRIPTION          15.99",
+            "amount": 15.99,
+            "category": "Entertainment"
+          },
+          {
+            "transaction_id": "tx6",
+            "date": "Oct 07 Oct 09",
+            "description": "COSTCO WHOLESALE              120.40",
+            "amount": 120.4,
+            "category": "Groceries"
+          }
+        ],
+        "category_breakdown": {
+          "Payment or credit": 300.0,
+          "Groceries": 172.7,
+          "Food": 8.15,
+          "Transport": 18.9,
+          "Entertainment": 15.99
+        }
+      }
+    ],
+    "goals": [
+      {
+        "goal_id": "g1",
+        "name": "Buy New Laptop",
+        "target_amount": 850.0,
+        "current_amount": 150.00000000000006,
+        "target_date": "2026-01-01"
+      }
+    ]
+  }
 }
