@@ -592,20 +592,24 @@ class SpendingAnalyzer:
         for t in transactions:
             desc = (t.description or "").upper()
             amt = t.amount
-            is_payment_like = any(key in desc for key in ["PAYMENT", "REFUND", "CREDIT", "RETURN"])
+
+            # Payment-like → always income
+            is_payment_like = any(
+                key in desc for key in ["PAYMENT", "REFUND", "CREDIT", "RETURN"]
+            )
 
             if is_payment_like:
-                if amt > 0:
-                    total_income += amt
-                else:
-                    total_spent += abs(amt)
-                    by_cat[t.category] = by_cat.get(t.category, 0.0) + abs(amt)
-            else:
-                if amt > 0:
-                    total_spent += amt
-                    by_cat[t.category] = by_cat.get(t.category, 0.0) + amt
-                else:
-                    total_income += abs(amt)
+                total_income += abs(amt)
+                continue
+
+            # Negative amounts = income (e.g., parser fallback)
+            if amt < 0:
+                total_income += abs(amt)
+                continue
+
+            # Positive amounts = spending
+            total_spent += amt
+            by_cat[t.category] = by_cat.get(t.category, 0.0) + amt
 
         return {
             "total_income": total_income,
@@ -1157,40 +1161,59 @@ def render_history_page():
         st.info("No previous statements found.")
         return
 
-    # Show most recent first
+    # Show newest first
     history_sorted = sorted(user.history, key=lambda item: item.upload_time, reverse=True)
+
+    # Show success message (once)
+    if "deleted_statement" in st.session_state:
+        st.success(f"Deleted {st.session_state.deleted_statement}.")
+        del st.session_state.deleted_statement
 
     for item in history_sorted:
         with st.container():
             cols = st.columns([3, 2, 2, 1])
 
+            # Left section: ID and timestamp
             with cols[0]:
                 st.markdown(
-                    f"**{item.statement_id}**  \n"
-                    f"{item.upload_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"**{item.statement_id}**<br>"
+                    f"{item.upload_time.strftime('%Y-%m-%d %H:%M:%S')}",
+                    unsafe_allow_html=True
                 )
+
+            # Spent
             with cols[1]:
                 st.markdown(f"**Total spent:** ${item.total_spent:,.2f}")
+
+            # Income
             with cols[2]:
                 st.markdown(f"**Total income:** ${item.total_income:,.2f}")
 
-            # Delete button for this statement
+            # Delete button (MUST be unique)
             with cols[3]:
-        
-            # Ensure each delete button has a unique key based on statement_id and timestamp
-                if st.button("Delete", key=f"delete_button_{item.statement_id}_{item.upload_time.timestamp()}"):
-                # Remove from the user's history
+                unique_key = f"delete_{item.statement_id}_{item.upload_time.timestamp()}"
+
+                if st.button("Delete", key=unique_key):
+                    # Delete it
                     user.history = [
                         h for h in user.history if h.statement_id != item.statement_id
                     ]
 
-        # Persist the change
-        save_users_to_file(get_user_store())
+                    # Save change
+                    save_users_to_file(get_user_store())
 
-        st.success(f"Deleted {item.statement_id}.")
-        st.rerun()
+                    # Persist message
+                    st.session_state.deleted_statement = item.statement_id
+
+                    st.rerun()
 
         st.markdown("---")
+
+
+    # Show success message ONCE per deletion
+    if "deleted_statement" in st.session_state:
+        st.success(f"Deleted {st.session_state.deleted_statement}.")
+        del st.session_state.deleted_statement
 
 def render_goals_page():
     require_auth()

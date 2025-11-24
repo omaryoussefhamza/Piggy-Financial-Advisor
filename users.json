@@ -47,7 +47,28 @@
                 "transactions": []
             }
         ],
-        "history": [],
-        "goals": []
+        "history": [
+            {
+                "statement_id": "stmt1",
+                "upload_time": "2025-11-23T23:07:26.499592",
+                "total_income": 224.96000000000004,
+                "total_spent": 74.96
+            },
+            {
+                "statement_id": "stmt2",
+                "upload_time": "2025-11-23T23:32:49.497708",
+                "total_income": 200.0,
+                "total_spent": 118.46999999999998
+            }
+        ],
+        "goals": [
+            {
+                "goal_id": "g1",
+                "name": "Buy New Laptop",
+                "target_amount": 850.0,
+                "current_amount": 150.00000000000006,
+                "target_date": "2026-01-01"
+            }
+        ]
     }
 }

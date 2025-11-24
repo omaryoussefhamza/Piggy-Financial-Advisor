@@ -9,19 +9,30 @@ USER_DATA_FILE = "users.json"
 
 
 def save_users_to_file(user_store: Dict[str, User]):
-    """Save users to a JSON file for persistence."""
+    """Convert dataclasses to serializable dicts and save to JSON."""
+
     serializable = {}
 
     for email, user in user_store.items():
-        serializable[email] = asdict(user)
+        # asdict() turns dataclasses → dictionaries
+        # but upload_time (datetime) needs string conversion
+        user_dict = asdict(user)
+
+        # convert datetime fields manually
+        for h in user_dict["history"]:
+            h["upload_time"] = h["upload_time"].isoformat()
+
+        serializable[email] = user_dict
 
     with open(USER_DATA_FILE, "w") as f:
         json.dump(serializable, f, indent=4)
 
 
-def load_users_from_file():
+def load_users_from_file() -> Dict[str, User]:
+    """Load users from JSON and reconstruct dataclasses."""
+    
     if not os.path.exists(USER_DATA_FILE):
-        return None
+        return {}
 
     with open(USER_DATA_FILE, "r") as f:
         data = json.load(f)
@@ -35,7 +46,7 @@ def load_users_from_file():
             email=u["email"],
             password=u["password"],
 
-            # ACCOUNTS (deep reconstruction)
+            # ACCOUNTS
             accounts=[
                 FinancialAccount(
                     account_id=a["account_id"],
@@ -49,21 +60,21 @@ def load_users_from_file():
                             date=t.get("date"),
                             description=t["description"],
                             amount=t["amount"],
-                            category=t["category"],
+                            category=t.get("category", "Other")
                         )
                         for t in a.get("transactions", [])
-                    ],
+                    ]
                 )
                 for a in u.get("accounts", [])
             ],
 
-            # HISTORY
+            # PDF / STATEMENT HISTORY
             history=[
                 StatementHistoryItem(
                     statement_id=h["statement_id"],
                     upload_time=datetime.fromisoformat(h["upload_time"]),
                     total_income=h["total_income"],
-                    total_spent=h["total_spent"],
+                    total_spent=h["total_spent"]
                 )
                 for h in u.get("history", [])
             ],
@@ -74,12 +85,11 @@ def load_users_from_file():
                     goal_id=g["goal_id"],
                     name=g["name"],
                     target_amount=g["target_amount"],
-                    current_amount=g["current_amount"],
-                    target_date=g.get("target_date"),
+                    current_amount=g.get("current_amount", 0.0),
+                    target_date=g.get("target_date")
                 )
                 for g in u.get("goals", [])
             ],
         )
 
     return loaded
-
