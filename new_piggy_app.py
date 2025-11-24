@@ -830,69 +830,82 @@ def parse_spending(text: str):
         spending.append((category.strip(), float(amount)))
     return spending
 
-def get_enhanced_ai_feedback(user: User):
-    """Generate comprehensive AI feedback based on full user history"""
-    api_key = get_gemini_api_key()
-    if not api_key:
-        return "AI feedback is currently unavailable due to configuration issues."
-
+api_key = get_gemini_api_key()
+if api_key:
     genai.configure(api_key=api_key)
-    
-    if not user.history:
-        return "Upload some statements to get personalized financial advice!"
-    
-    # Prepare comprehensive financial history
-    history_sorted = sorted(user.history, key=lambda h: h.upload_time)
-    
-    # Build detailed spending analysis
-    financial_data = []
-    total_income_all_time = 0
-    total_spent_all_time = 0
-    
-    for i, statement in enumerate(history_sorted, 1):
-        financial_data.append({
-            "period": f"Statement {i} ({statement.upload_time.strftime('%Y-%m-%d')})",
-            "income": statement.total_income,
-            "spending": statement.total_spent,
-            "savings": statement.total_income - statement.total_spent,
-            "categories": statement.category_breakdown
-        })
-        total_income_all_time += statement.total_income
-        total_spent_all_time += statement.total_spent
-    
-    # Calculate trends
-    savings_rate = ((total_income_all_time - total_spent_all_time) / total_income_all_time * 100) if total_income_all_time > 0 else 0
-    
-    # Build comprehensive prompt
-    prompt = f"""
-    As a financial advisor, analyze this user's spending history and provide detailed, actionable advice:
+    GEMINI_MODEL = genai.GenerativeModel("models/gemini-2.5-flash")
+else:
+    GEMINI_MODEL = None
 
-    FINANCIAL HISTORY:
-    {json.dumps(financial_data, indent=2)}
+def get_enhanced_ai_feedback(user: User):
+    """Generate Gemini-powered insights using: 
+       - full transaction history 
+       - user goals
+    """
+
+    if GEMINI_MODEL is None:
+        return "Gemini API key not configured."
+
+    if not user.history:
+        return "Upload statements first so I can analyze your spending!"
+
+    # Prepare history
+    history_sorted = sorted(user.history, key=lambda h: h.upload_time)
+    history_data = []
+    total_income = 0
+    total_spent = 0
+
+    for i, h in enumerate(history_sorted, 1):
+        entry = {
+            "period": f"Statement {i} - {h.upload_time.strftime('%Y-%m-%d')}",
+            "income": h.total_income,
+            "spent": h.total_spent,
+            "categories": h.category_breakdown
+        }
+        history_data.append(entry)
+        total_income += h.total_income
+        total_spent += h.total_spent
+
+    net_savings = total_income - total_spent
+    goals_data = [
+    {
+        "goal_id": g.goal_id,
+        "name": g.name,
+        "target_amount": g.target_amount,
+        "current_amount": g.current_amount,
+        "target_date": g.target_date,
+    }
+    for g in user.goals
+    ] if user.goals else []
+
+    prompt = f"""
+    You are Piggy, a friendly financial coach.
+
+    USER FINANCIAL HISTORY:
+    {json.dumps(history_data, indent=2)}
 
     OVERALL SUMMARY:
-    - Total Income: ${total_income_all_time:,.2f}
-    - Total Spending: ${total_spent_all_time:,.2f}
-    - Net Savings: ${total_income_all_time - total_spent_all_time:,.2f}
-    - Overall Savings Rate: {savings_rate:.1f}%
+    - Total Income: {total_income:.2f}
+    - Total Spending: {total_spent:.2f}
+    - Net Savings: {net_savings:.2f}
 
-    Please provide a comprehensive analysis with:
-    1. **Spending Patterns**: Identify trends, seasonal variations, and concerning patterns
-    2. **Category Analysis**: Which categories are they overspending in? Where can they cut back?
-    3. **Savings Opportunities**: Specific, actionable ways to save money based on their spending
-    4. **Goal Progress**: If they have savings goals, how are they tracking?
-    5. **Financial Health Score**: Rate their financial health from 1-10 with justification
-    6. **Next Steps**: 3-5 specific actions they should take in the next 30 days
+    USER GOALS:
+    {json.dumps(goals_data, indent=2)}
 
-    Make the advice personalized, empathetic, and practical. Use emojis to make it engaging.
+    Provide:
+    1. What the user is doing well
+    2. Where they can improve spending
+    3. Category-specific insights
+    4. Tips aligned with their goals
+    5. Encouraging tone
     """
-    
+
     try:
-        model = genai.GenerativeModel("models/gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        response = GEMINI_MODEL.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"I'm having trouble analyzing your data right now. Please try again later. Error: {str(e)}"
+        return f"AI is having issues right now: {str(e)}"
+
 
 # Update the AI Feedback tab:
 def render_enhanced_ai_feedback():
@@ -926,7 +939,7 @@ def render_enhanced_ai_feedback():
 
     # FIXED: Truly unique key with timestamp
     import time
-    unique_key = f"ai_feedback_{int(time.time() * 1000)}"
+    unique_key = f"ai_feedback_btn"
     
     if st.button("🎯 Get Personalized Financial Advice", type="primary", key=unique_key):
         with st.spinner("🤔 Analyzing your financial patterns... This may take a moment."):
@@ -1511,31 +1524,7 @@ else:
 
     with tab_ai:
         render_enhanced_ai_feedback()
-    render_enhanced_ai_feedback()  # changed from whatever was there before
-    user = get_current_user()
-    st.header("ai spending feedback")
-    if not user or not user.history:
-        st.info("upload at least one statement on the reports tab so i can analyze your spending history.")
-    else:
-            # sort statements oldest to newest so the ai sees the trend in order
-        history_sorted = sorted(user.history, key=lambda h: h.upload_time)
 
-        # build a spending list that covers all statements
-        spending_list = []
-        for idx, item in enumerate(history_sorted, start=1):
-            label = f"statement {idx} ({item.upload_time.strftime('%y-%m-%d')})"
-            spending_list.append((label, item.total_spent))
-
-            st.subheader("statements included in ai analysis")
-            df = pd.DataFrame(
-                [{
-                    "statement": label,
-                    "total spent": amount,
-                    "total income": history_sorted[i].total_income,
-                } for i, (label, amount) in enumerate(spending_list)]
-            )
-            st.dataframe(df, use_container_width=True)
-        
     # Footer
     st.markdown(
         "<div class='piggy-footer'>© 2025 Piggy · Demo app for CP317</div>",
