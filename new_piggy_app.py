@@ -1132,7 +1132,7 @@ def render_enhanced_dashboard():
                     color_discrete_sequence=px.colors.qualitative.Pastel,
                 )
                 fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-                st.plotly_chart(fig_pie, width="stretch")
+                st.plotly_chart(fig_pie, use_container_width=True)
 
         with chart_col2:
             categories = list(by_category.keys())
@@ -1147,7 +1147,7 @@ def render_enhanced_dashboard():
                 color_continuous_scale="Blues",
             )
             fig_bar.update_layout(showlegend=False)
-            st.plotly_chart(fig_bar, width="stretch")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
     # Recent transactions
     st.subheader("Recent transactions")
@@ -1213,7 +1213,7 @@ def render_enhanced_dashboard():
             hovermode="x unified",
         )
 
-        st.plotly_chart(fig_trend, width="stretch")
+        st.plotly_chart(fig_trend, use_container_width=True)
 
 
 def render_enhanced_reports_page():
@@ -1394,7 +1394,7 @@ def render_goals_page():
             goal.current_amount = total_savings
             progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
             
-            with st.expander(f"📊 {goal.name}", expanded=(idx == 0)):
+            with st.expander(f"{goal.name}", expanded=(idx == 0)):
                 cols = st.columns([2, 1])
                 
                 with cols[0]:
@@ -1409,7 +1409,7 @@ def render_goals_page():
                         remaining = goal.target_amount - goal.current_amount
                         st.info(f"You have reached {progress * 100:.1f}% of this goal. ${remaining:,.2f} remaining.")
                     else:
-                        st.success("✅ You have reached this goal!")
+                        st.success("You have reached this goal!")
                 
                 with cols[1]:
                     st.markdown(
