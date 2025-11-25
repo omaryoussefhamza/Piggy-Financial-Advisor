@@ -219,6 +219,13 @@
         "target_amount": 850.0,
         "current_amount": 150.00000000000006,
         "target_date": "2026-01-01"
+      },
+      {
+        "goal_id": "g2_1764029473",
+        "name": "Emergency Fund",
+        "target_amount": 1500.0,
+        "current_amount": 150.00000000000006,
+        "target_date": null
       }
     ]
   }
