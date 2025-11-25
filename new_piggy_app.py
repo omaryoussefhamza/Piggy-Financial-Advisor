@@ -1345,100 +1345,128 @@ def render_goals_page():
         f"Based on the statements you have uploaded so far, Piggy estimates your total savings at about **${total_savings:,.2f}**."
     )
 
-    if not user.goals:
-        st.subheader("Create your first goal")
-        with st.form("create_goal_form"):
-            goal_name = st.text_input("Goal name", placeholder="Trip, emergency fund, new laptop")
-            target_amount_str = st.text_input("Target amount", placeholder="2000")
+    # Display all existing goals
+    if user.goals:
+        st.subheader("Your goals")
+        
+        for idx, goal in enumerate(user.goals):
+            # Update current amount to reflect latest savings
+            goal.current_amount = total_savings
+            progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
+            
+            with st.expander(f"📊 {goal.name}", expanded=(idx == 0)):
+                cols = st.columns([2, 1])
+                
+                with cols[0]:
+                    st.write(f"**Target:** ${goal.target_amount:,.2f}")
+                    st.write(f"**Saved so far:** ${goal.current_amount:,.2f}")
+                    if goal.target_date:
+                        st.write(f"**Target date:** {goal.target_date}")
+                    
+                    st.progress(progress)
+                    
+                    if progress < 1.0:
+                        remaining = goal.target_amount - goal.current_amount
+                        st.info(f"You have reached {progress * 100:.1f}% of this goal. ${remaining:,.2f} remaining.")
+                    else:
+                        st.success("✅ You have reached this goal!")
+                
+                with cols[1]:
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color: #ffffff;
+                            border-radius: 12px;
+                            padding: 16px 18px;
+                            border: 1px solid #f1f3f5;
+                            color: {NAVY};
+                            font-size: 14px;">
+                            <strong>Summary</strong><br/>
+                            Target: ${goal.target_amount:,.2f}<br/>
+                            Current: ${goal.current_amount:,.2f}<br/>
+                            Progress: {progress * 100:.1f}%
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                
+                # Edit and delete options
+                st.markdown("---")
+                edit_cols = st.columns([3, 1])
+                
+                with edit_cols[0]:
+                    with st.form(f"edit_goal_{goal.goal_id}"):
+                        st.write("**Edit this goal**")
+                        new_name = st.text_input("Goal name", value=goal.name, key=f"name_{goal.goal_id}")
+                        new_target_str = st.text_input("Target amount", value=str(goal.target_amount), key=f"target_{goal.goal_id}")
+                        new_target_date = st.text_input("Target date (optional)", value=goal.target_date or "", key=f"date_{goal.goal_id}")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            update_submitted = st.form_submit_button("Update goal")
+                        with col2:
+                            delete_submitted = st.form_submit_button("Delete goal", type="secondary")
+                        
+                        if update_submitted:
+                            try:
+                                new_target = float(new_target_str)
+                                if new_target <= 0:
+                                    st.error("Target amount must be positive.")
+                                else:
+                                    goal.name = new_name or goal.name
+                                    goal.target_amount = new_target
+                                    goal.target_date = new_target_date or None
+                                    save_users_to_file(get_user_store())
+                                    st.success("Goal updated!")
+                                    st.rerun()
+                            except ValueError:
+                                st.error("Please enter a numeric target amount.")
+                        
+                        if delete_submitted:
+                            user.goals = [g for g in user.goals if g.goal_id != goal.goal_id]
+                            save_users_to_file(get_user_store())
+                            st.success(f"Deleted goal: {goal.name}")
+                            st.rerun()
+        
+        st.markdown("---")
+    
+    # Add new goal section
+    st.subheader("➕ Create a new goal")
+    
+    with st.form("create_new_goal_form"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            goal_name = st.text_input("Goal name", placeholder="e.g., Emergency fund, New laptop")
+        with col2:
+            target_amount_str = st.text_input("Target amount", placeholder="e.g., 2000")
+        with col3:
             target_date = st.text_input("Target date (optional)", placeholder="YYYY-MM-DD")
-            create_submitted = st.form_submit_button("Create goal")
-
-        if create_submitted:
+        
+        create_submitted = st.form_submit_button("Create goal", use_container_width=True)
+    
+    if create_submitted:
+        if not goal_name or not target_amount_str:
+            st.error("Please provide both a goal name and target amount.")
+        else:
             try:
                 target_amount = float(target_amount_str)
                 if target_amount <= 0:
                     st.error("Target amount must be positive.")
                 else:
                     new_goal = Goal(
-                        goal_id=f"g{len(user.goals) + 1}",
-                        name=goal_name or "My goal",
+                        goal_id=f"g{len(user.goals) + 1}_{int(datetime.now().timestamp())}",
+                        name=goal_name,
                         target_amount=target_amount,
                         current_amount=total_savings,
                         target_date=target_date or None,
                     )
                     user.goals.append(new_goal)
                     save_users_to_file(get_user_store())
-                    st.success("Goal created.")
+                    st.success(f"Goal '{goal_name}' created successfully!")
                     st.rerun()
             except ValueError:
                 st.error("Please enter a numeric target amount.")
-        return
-
-    goal = user.goals[0]
-    goal.current_amount = total_savings
-    progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
-
-    st.subheader("Current goal")
-    cols = st.columns(2)
-
-    with cols[0]:
-        st.write(f"**Goal:** {goal.name}")
-        st.write(f"**Target:** ${goal.target_amount:,.2f}")
-        st.write(f"**Saved so far:** ${goal.current_amount:,.2f}")
-        if goal.target_date:
-            st.write(f"**Target date:** {goal.target_date}")
-
-        st.progress(progress)
-
-        if progress < 1.0:
-            st.info(f"You have reached about {progress * 100:.1f} percent of this goal.")
-        else:
-            st.success("You have reached this goal.")
-
-    with cols[1]:
-        st.markdown(
-            f"""
-            <div style="
-                background-color: #ffffff;
-                border-radius: 12px;
-                padding: 16px 18px;
-                border: 1px solid #f1f3f5;
-                color: {NAVY};
-                font-size: 14px;">
-                <strong>Goal summary</strong><br/>
-                Target amount: ${goal.target_amount:,.2f}<br/>
-                Current estimated savings: ${goal.current_amount:,.2f}<br/>
-                Completion: {progress * 100:.1f} percent
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("----")
-    st.subheader("Adjust goal")
-
-    with st.form("update_goal_form"):
-        new_name = st.text_input("Goal name", value=goal.name)
-        new_target_str = st.text_input("Target amount", value=str(goal.target_amount))
-        new_target_date = st.text_input("Target date (optional)", value=goal.target_date or "")
-        update_submitted = st.form_submit_button("Update goal")
-
-    if update_submitted:
-        try:
-            new_target = float(new_target_str)
-            if new_target <= 0:
-                st.error("Target amount must be positive.")
-            else:
-                goal.name = new_name or goal.name
-                goal.target_amount = new_target
-                goal.target_date = new_target_date or None
-
-                save_users_to_file(get_user_store())
-
-                st.success("Goal updated.")
-                st.rerun()
-        except ValueError:
-            st.error("Please enter a numeric target amount.")
 
 
 def render_settings_page():
