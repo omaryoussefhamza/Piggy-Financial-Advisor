@@ -2,16 +2,14 @@ import streamlit as st  # type: ignore
 import pandas as pd  # type: ignore
 import re
 from io import BytesIO
-from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import copy
-import time
+import base64
 
 # Visualization imports
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from PyPDF2 import PdfReader  # type: ignore
 
@@ -68,33 +66,60 @@ def inject_global_styles():
             border-right: 1px solid #e5e7eb;
         }}
 
+        [data-testid="stSidebar"] > div:first-child {{
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }}
+
         /* Sidebar header branding */
         .piggy-sidebar-header {{
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 10px;
-            padding: 12px 4px 20px 4px;
+            justify-content: center;
+            gap: 15px;
+            padding: 8px 0 20px 0;
             border-bottom: 1px solid #f1f3f5;
             margin-bottom: 12px;
+            margin-left: -1rem;
+            margin-right: -1rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
         }}
 
         .piggy-logo-img {{
-            width: 40px;
-            height: 40px;
+            width: 120px;
+            height: 120px;
+            display: block;
+            margin: 0 auto;
+        }}
+
+        .piggy-branding {{
+            text-align: center;
+            width: 100%;
         }}
 
         .piggy-title {{
-            font-size: 22px;
+            font-size: 26px;
             font-weight: 700;
             color: {NAVY};
+            text-align: center;
+            margin: 0;
+            line-height: 1.2;
         }}
 
         .piggy-tagline {{
-            font-size: 12px;
+            font-size: 13px;
             color: {TEXT_MUTED};
+            text-align: center;
+            margin-top: 4px;
         }}
 
         /* Sidebar navigation radio styled as buttons */
+        [data-testid="stSidebar"] [role="radiogroup"] {{
+            padding: 0;
+        }}
+
         [data-testid="stSidebar"] [role="radiogroup"] > label {{
             display: block;
             width: 100%;
@@ -107,16 +132,6 @@ def inject_global_styles():
             cursor: pointer;
             font-size: 14px;
             font-weight: 500;
-        }}
-
-        [data-testid="stSidebar"] [role="radiogroup"] > label:hover {{
-            background-color: {PINK_HOVER};
-        }}
-
-        [data-testid="stSidebar"] [role="radiogroup"] > label[aria-checked="true"] {{
-            background-color: {PINK_ACTIVE};
-            border-color: #e98ab1;
-            box-shadow: 0 0 0 1px rgba(233, 138, 177, 0.35);
         }}
 
         /* Sidebar section titles */
@@ -804,18 +819,43 @@ def compute_total_savings_from_history(user: User) -> float:
     return total
 
 # ===================== UI PAGES =====================
-
+def get_base64_logo():
+    """Load and encode the logo image as base64."""
+    try:
+        with open("logo/piggy_logo.png", "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except FileNotFoundError:
+        # Return a fallback emoji or empty string if logo not found
+        return ""
 
 def render_login_page():
-    st.title("Piggy")
-    st.subheader("Personal spending insights")
-
-    # Debug toggle
-    if st.checkbox("Show debug information"):
-        st.session_state.show_debug = True
+    # Add logo at the top
+    logo_b64 = get_base64_logo()
+    
+    if logo_b64:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin-top: 2rem; margin-bottom: 1rem;">
+                <img src="data:image/png;base64,{logo_b64}" style="width: 120px; height: 120px; margin-bottom: 0.5rem;" alt="Piggy logo" />
+                <h1 style="margin: 0; padding: 0 0 0 10px; color: {NAVY};">Piggy</h1>
+                <p style="margin: 0.5rem 0 0 0; color: {TEXT_MUTED}; font-size: 16px;">Personal spending insights</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.session_state.show_debug = False
-
+        # Fallback emoji
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin-top: 2rem; margin-bottom: 1rem;">
+                <div style="font-size: 80px; line-height: 1; margin-bottom: 0.5rem;">🐷</div>
+                <h1 style="margin: 0; padding: 0 0 0 10px; color: {NAVY};">Piggy</h1>
+                <p style="margin: 0.5rem 0 0 0; color: {TEXT_MUTED}; font-size: 16px;">Personal spending insights</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     if st.session_state.signup_success:
         st.success(st.session_state.signup_success)
         st.session_state.signup_success = None
@@ -1345,128 +1385,100 @@ def render_goals_page():
         f"Based on the statements you have uploaded so far, Piggy estimates your total savings at about **${total_savings:,.2f}**."
     )
 
-    # Display all existing goals
-    if user.goals:
-        st.subheader("Your goals")
-        
-        for idx, goal in enumerate(user.goals):
-            # Update current amount to reflect latest savings
-            goal.current_amount = total_savings
-            progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
-            
-            with st.expander(f"📊 {goal.name}", expanded=(idx == 0)):
-                cols = st.columns([2, 1])
-                
-                with cols[0]:
-                    st.write(f"**Target:** ${goal.target_amount:,.2f}")
-                    st.write(f"**Saved so far:** ${goal.current_amount:,.2f}")
-                    if goal.target_date:
-                        st.write(f"**Target date:** {goal.target_date}")
-                    
-                    st.progress(progress)
-                    
-                    if progress < 1.0:
-                        remaining = goal.target_amount - goal.current_amount
-                        st.info(f"You have reached {progress * 100:.1f}% of this goal. ${remaining:,.2f} remaining.")
-                    else:
-                        st.success("✅ You have reached this goal!")
-                
-                with cols[1]:
-                    st.markdown(
-                        f"""
-                        <div style="
-                            background-color: #ffffff;
-                            border-radius: 12px;
-                            padding: 16px 18px;
-                            border: 1px solid #f1f3f5;
-                            color: {NAVY};
-                            font-size: 14px;">
-                            <strong>Summary</strong><br/>
-                            Target: ${goal.target_amount:,.2f}<br/>
-                            Current: ${goal.current_amount:,.2f}<br/>
-                            Progress: {progress * 100:.1f}%
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                
-                # Edit and delete options
-                st.markdown("---")
-                edit_cols = st.columns([3, 1])
-                
-                with edit_cols[0]:
-                    with st.form(f"edit_goal_{goal.goal_id}"):
-                        st.write("**Edit this goal**")
-                        new_name = st.text_input("Goal name", value=goal.name, key=f"name_{goal.goal_id}")
-                        new_target_str = st.text_input("Target amount", value=str(goal.target_amount), key=f"target_{goal.goal_id}")
-                        new_target_date = st.text_input("Target date (optional)", value=goal.target_date or "", key=f"date_{goal.goal_id}")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            update_submitted = st.form_submit_button("Update goal")
-                        with col2:
-                            delete_submitted = st.form_submit_button("Delete goal", type="secondary")
-                        
-                        if update_submitted:
-                            try:
-                                new_target = float(new_target_str)
-                                if new_target <= 0:
-                                    st.error("Target amount must be positive.")
-                                else:
-                                    goal.name = new_name or goal.name
-                                    goal.target_amount = new_target
-                                    goal.target_date = new_target_date or None
-                                    save_users_to_file(get_user_store())
-                                    st.success("Goal updated!")
-                                    st.rerun()
-                            except ValueError:
-                                st.error("Please enter a numeric target amount.")
-                        
-                        if delete_submitted:
-                            user.goals = [g for g in user.goals if g.goal_id != goal.goal_id]
-                            save_users_to_file(get_user_store())
-                            st.success(f"Deleted goal: {goal.name}")
-                            st.rerun()
-        
-        st.markdown("---")
-    
-    # Add new goal section
-    st.subheader("➕ Create a new goal")
-    
-    with st.form("create_new_goal_form"):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            goal_name = st.text_input("Goal name", placeholder="e.g., Emergency fund, New laptop")
-        with col2:
-            target_amount_str = st.text_input("Target amount", placeholder="e.g., 2000")
-        with col3:
+    if not user.goals:
+        st.subheader("Create your first goal")
+        with st.form("create_goal_form"):
+            goal_name = st.text_input("Goal name", placeholder="Trip, emergency fund, new laptop")
+            target_amount_str = st.text_input("Target amount", placeholder="2000")
             target_date = st.text_input("Target date (optional)", placeholder="YYYY-MM-DD")
-        
-        create_submitted = st.form_submit_button("Create goal", use_container_width=True)
-    
-    if create_submitted:
-        if not goal_name or not target_amount_str:
-            st.error("Please provide both a goal name and target amount.")
-        else:
+            create_submitted = st.form_submit_button("Create goal")
+
+        if create_submitted:
             try:
                 target_amount = float(target_amount_str)
                 if target_amount <= 0:
                     st.error("Target amount must be positive.")
                 else:
                     new_goal = Goal(
-                        goal_id=f"g{len(user.goals) + 1}_{int(datetime.now().timestamp())}",
-                        name=goal_name,
+                        goal_id=f"g{len(user.goals) + 1}",
+                        name=goal_name or "My goal",
                         target_amount=target_amount,
                         current_amount=total_savings,
                         target_date=target_date or None,
                     )
                     user.goals.append(new_goal)
                     save_users_to_file(get_user_store())
-                    st.success(f"Goal '{goal_name}' created successfully!")
+                    st.success("Goal created.")
                     st.rerun()
             except ValueError:
                 st.error("Please enter a numeric target amount.")
+        return
+
+    goal = user.goals[0]
+    goal.current_amount = total_savings
+    progress = min(goal.current_amount / goal.target_amount, 1.0) if goal.target_amount > 0 else 0.0
+
+    st.subheader("Current goal")
+    cols = st.columns(2)
+
+    with cols[0]:
+        st.write(f"**Goal:** {goal.name}")
+        st.write(f"**Target:** ${goal.target_amount:,.2f}")
+        st.write(f"**Saved so far:** ${goal.current_amount:,.2f}")
+        if goal.target_date:
+            st.write(f"**Target date:** {goal.target_date}")
+
+        st.progress(progress)
+
+        if progress < 1.0:
+            st.info(f"You have reached about {progress * 100:.1f} percent of this goal.")
+        else:
+            st.success("You have reached this goal.")
+
+    with cols[1]:
+        st.markdown(
+            f"""
+            <div style="
+                background-color: #ffffff;
+                border-radius: 12px;
+                padding: 16px 18px;
+                border: 1px solid #f1f3f5;
+                color: {NAVY};
+                font-size: 14px;">
+                <strong>Goal summary</strong><br/>
+                Target amount: ${goal.target_amount:,.2f}<br/>
+                Current estimated savings: ${goal.current_amount:,.2f}<br/>
+                Completion: {progress * 100:.1f} percent
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("----")
+    st.subheader("Adjust goal")
+
+    with st.form("update_goal_form"):
+        new_name = st.text_input("Goal name", value=goal.name)
+        new_target_str = st.text_input("Target amount", value=str(goal.target_amount))
+        new_target_date = st.text_input("Target date (optional)", value=goal.target_date or "")
+        update_submitted = st.form_submit_button("Update goal")
+
+    if update_submitted:
+        try:
+            new_target = float(new_target_str)
+            if new_target <= 0:
+                st.error("Target amount must be positive.")
+            else:
+                goal.name = new_name or goal.name
+                goal.target_amount = new_target
+                goal.target_date = new_target_date or None
+
+                save_users_to_file(get_user_store())
+
+                st.success("Goal updated.")
+                st.rerun()
+        except ValueError:
+            st.error("Please enter a numeric target amount.")
 
 
 def render_settings_page():
@@ -1500,21 +1512,38 @@ def render_placeholder_page(title: str, text: str):
 
 def render_sidebar(user_name: Optional[str]) -> str:
     with st.sidebar:
-        st.markdown(
-            f"""
-            <div class="piggy-sidebar-header">
-                <img src="/mnt/data/12707622.png" class="piggy-logo-img" alt="Piggy logo" />
-                <div>
-                    <div class="piggy-title">Piggy</div>
-                    <div class="piggy-tagline">Personal spending insights</div>
+        logo_b64 = get_base64_logo()
+        
+        if logo_b64:
+            st.markdown(
+                f"""
+                <div class="piggy-sidebar-header">
+                    <img src="data:image/png;base64,{logo_b64}" class="piggy-logo-img" alt="Piggy logo" />
+                    <div class="piggy-branding">
+                        <div class="piggy-title">Piggy</div>
+                        <div class="piggy-tagline">Personal spending insights</div>
+                    </div>
                 </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            # Fallback if logo doesn't load
+            st.markdown(
+                f"""
+                <div class="piggy-sidebar-header">
+                    <div style="font-size:80px; line-height: 1;">🐷</div>
+                    <div class="piggy-branding">
+                        <div class="piggy-title">Piggy</div>
+                        <div class="piggy-tagline">Personal spending insights</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         if user_name:
-            st.markdown(f"<div style='font-size:12px;color:{TEXT_MUTED};margin-bottom:12px;'>Logged in as <strong>{user_name}</strong></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:12px;color:{TEXT_MUTED};margin-bottom:12px;text-align:center;'>Logged in as <strong>{user_name}</strong></div>", unsafe_allow_html=True)
 
         st.markdown('<div class="piggy-sidebar-section-title">Navigation</div>', unsafe_allow_html=True)
 
