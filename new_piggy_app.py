@@ -317,6 +317,12 @@ def load_users_from_file():
             accounts=accounts,
             history=history,
             goals=goals,
+            profile_image_b64=u_data.get("profile_image_b64"),
+            preferences=u_data.get("preferences", {
+                "date_display": "transaction",
+                "language": "en",
+                "currency": "CAD",
+            }),
         )
 
     return loaded
@@ -1518,16 +1524,108 @@ def render_settings_page():
         st.info("No user loaded.")
         return
 
+    # -------- Profile section --------
     st.subheader("Profile")
 
-    with st.form("settings_profile_form"):
-        new_name = st.text_input("Display name", value=user.name)
-        new_email = st.text_input("Email", value=user.email, disabled=True)
-        submitted = st.form_submit_button("Save changes")
+    prof_col1, prof_col2 = st.columns([1, 2])
 
-    if submitted:
-        user.name = new_name or user.name
-        st.success("Profile updated for this session.")
+    with prof_col1:
+        st.write("Profile picture")
+
+        # Show existing avatar if set
+        if getattr(user, "profile_image_b64", None):
+            st.image(
+                base64.b64decode(user.profile_image_b64),
+                width=120,
+                caption=user.name,
+            )
+        else:
+            st.markdown(
+                "<div style='width:120px;height:120px;border-radius:999px;"
+                "background-color:#e5e7eb;display:flex;align-items:center;"
+                "justify-content:center;font-size:48px;color:#9ca3af;'>🐷</div>",
+                unsafe_allow_html=True,
+            )
+
+        uploaded_avatar = st.file_uploader(
+            "Upload new picture",
+            type=["png", "jpg", "jpeg"],
+            key="profile_pic_uploader",
+        )
+
+        if uploaded_avatar is not None:
+            img_bytes = uploaded_avatar.read()
+            user.profile_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            save_users_to_file(get_user_store())
+            st.success("Profile picture updated.")
+
+    with prof_col2:
+        with st.form("settings_profile_form"):
+            new_name = st.text_input("Display name", value=user.name)
+            new_email = st.text_input("Email", value=user.email, disabled=True)
+            submitted = st.form_submit_button("Save changes")
+
+        if submitted:
+            user.name = new_name or user.name
+            save_users_to_file(get_user_store())
+            st.success("Profile updated.")
+
+    st.markdown("---")
+
+    # Ensure preferences dict exists
+    if not getattr(user, "preferences", None):
+        user.preferences = {
+            "date_display": "transaction",
+            "language": "en",
+            "currency": "CAD",
+        }
+
+    # -------- Preferences section --------
+    st.subheader("Preferences")
+
+    with st.form("settings_pref_form"):
+        # Date display preference
+        current_date_pref = user.preferences.get("date_display", "transaction")
+        date_pref = st.radio(
+            "Show dates as",
+            ["Transaction date", "Posted date"],
+            index=0 if current_date_pref == "transaction" else 1,
+        )
+
+        # Language preference
+        language_codes = {
+            "English": "en",
+            "French": "fr",
+        }
+        current_lang_code = user.preferences.get("language", "en")
+        current_lang_label = next(
+            (k for k, v in language_codes.items() if v == current_lang_code),
+            "English",
+        )
+        language_label = st.selectbox(
+            "Language",
+            list(language_codes.keys()),
+            index=list(language_codes.keys()).index(current_lang_label),
+        )
+
+        # Currency preference
+        currencies = ["CAD", "USD", "EUR", "GBP"]
+        current_currency = user.preferences.get("currency", "CAD")
+        currency = st.selectbox(
+            "Currency",
+            currencies,
+            index=currencies.index(current_currency) if current_currency in currencies else 0,
+        )
+
+        pref_submitted = st.form_submit_button("Save preferences")
+
+    if pref_submitted:
+        user.preferences["date_display"] = "transaction" if date_pref == "Transaction date" else "posted"
+        user.preferences["language"] = language_codes[language_label]
+        user.preferences["currency"] = currency
+
+        save_users_to_file(get_user_store())
+        st.success("Preferences updated.")
 
 
 def render_placeholder_page(title: str, text: str):
