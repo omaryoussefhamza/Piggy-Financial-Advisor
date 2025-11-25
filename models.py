@@ -53,7 +53,16 @@ class User:
     accounts: List[FinancialAccount] = field(default_factory=list)
     history: List[StatementHistoryItem] = field(default_factory=list)
     goals: List[Goal] = field(default_factory=list)
-    
+    profile_image_b64: Optional[str] = None
+
+   
+    preferences: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "date_display": "transaction",  
+            "language": "en",               
+            "currency": "CAD",              
+        }
+    )
     def check_password(self, password: str) -> bool:
         return self.password == password
     
@@ -75,7 +84,12 @@ class User:
                 }
                 for h in self.history
             ],
-            'goals': [g.__dict__ for g in self.goals]
+            'goals': [g.__dict__ for g in self.goals],
+
+            # Save new fields
+            'profile_image_b64': self.profile_image_b64,
+            'preferences': self.preferences
+        }
         }
     def check_password(self, pwd: str) -> bool:
         return self.password == pwd
