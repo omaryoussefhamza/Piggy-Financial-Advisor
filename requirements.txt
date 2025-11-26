@@ -1,3 +1,4 @@
 streamlit
 plotly
 PyPDF2
+pdfplumber
