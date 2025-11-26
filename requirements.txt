@@ -2,3 +2,5 @@ streamlit
 plotly
 PyPDF2
 pdfplumber
+pandas
+google-generativeai
