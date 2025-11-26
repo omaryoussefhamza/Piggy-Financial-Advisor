@@ -90,6 +90,6 @@ class User:
             'profile_image_b64': self.profile_image_b64,
             'preferences': self.preferences
         }
-        }
+        
     def check_password(self, pwd: str) -> bool:
         return self.password == pwd

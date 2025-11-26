@@ -1331,7 +1331,7 @@ def render_enhanced_reports_page():
 
             rec = st.session_state.recommendation
             st.info(rec.title)
-            st.write(rec.description)
+            st.text(rec.description)          
             st.caption(
                 f"Generated on {rec.generation_date.strftime('%B %d, %Y at %H:%M')}."
             )
